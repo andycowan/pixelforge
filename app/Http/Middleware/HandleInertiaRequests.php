@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\CreditLedgerEntry;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -41,6 +42,8 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
+            // Authoritative balance on every page; partial reloads must list 'credits' to refresh it.
+            'credits' => fn (): ?array => $request->user() === null ? null : CreditLedgerEntry::balanceFor($request->user()),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }

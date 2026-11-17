@@ -47,7 +47,8 @@ final class RequestGenerationTest extends TestCase
             GetPricing::class => $this->pricingResponse(),
         ]);
 
-        $this->user = User::factory()->create();
+        // Credit is not under test here; CreditBalanceTest covers affordability.
+        $this->user = User::factory()->withCredit(10_000_000_000)->create();
     }
 
     public function test_guests_are_redirected_to_login_and_nothing_is_submitted(): void
@@ -297,7 +298,7 @@ final class RequestGenerationTest extends TestCase
     {
         $token = (string) Str::uuid7();
         $payload = $this->payload(['submission_token' => $token]);
-        $other = User::factory()->create();
+        $other = User::factory()->withCredit(10_000_000_000)->create();
 
         $this->actingAs($this->user)
             ->post(route('generations.store'), $payload)

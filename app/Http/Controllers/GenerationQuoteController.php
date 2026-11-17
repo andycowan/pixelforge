@@ -7,6 +7,7 @@ use App\Enums\GenerationQuality;
 use App\Enums\GenerationSize;
 use App\Exceptions\PricingException;
 use App\Http\Requests\GenerationQuoteRequest;
+use App\Models\CreditLedgerEntry;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -36,7 +37,11 @@ final class GenerationQuoteController extends Controller
             );
         }
 
-        return $this->noStore(response()->json($quote->toArray()));
+        // Advisory only: submission re-checks credit under the owner lock.
+        return $this->noStore(response()->json([
+            ...$quote->toArray(),
+            'affordable' => CreditLedgerEntry::canAfford($request->user(), $quote->maximumCostNanodollars),
+        ]));
     }
 
     private function noStore(JsonResponse $response): JsonResponse

@@ -85,6 +85,8 @@ final class GenerationQuoteTest extends TestCase
                 'output_tokens' => '40.00',
                 'reasoning_tokens' => '12.50',
             ],
+            // A new user has no credit; CreditBalanceTest covers the true case.
+            'affordable' => false,
         ]);
 
         $this->assertQuoteIsNotCacheable($response);

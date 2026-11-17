@@ -10,6 +10,7 @@ use App\Exceptions\ProviderPayloadException;
 use App\Http\Integrations\Pixelforge\PixelforgeConnector;
 use App\Http\Integrations\Pixelforge\Requests\CreateGeneration;
 use App\Jobs\Middleware\ProviderRequestBudget;
+use App\Models\CreditLedgerEntry;
 use App\Models\Generation;
 use App\Models\OutboxMessage;
 use App\Services\GenerationSubmissionPolicy;
@@ -163,6 +164,10 @@ final class SubmitGenerationJob implements ShouldQueue
     {
         $revision = $generation->revision;
         $generation->recordSubmissionProblem($error, $retryAt, $status);
+        if ($generation->submission_status === GenerationSubmissionStatus::Rejected) {
+            // A definitive rejection is never billed; paused or uncertain work keeps its hold.
+            CreditLedgerEntry::releaseHoldFor($generation);
+        }
         if ($generation->revision === $revision) {
             return false;
         }

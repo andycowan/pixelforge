@@ -45,9 +45,18 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
         return $this->hasMany(Generation::class);
     }
 
+    /**
+     * @return HasMany<CreditLedgerEntry, $this>
+     */
+    public function creditLedgerEntries(): HasMany
+    {
+        return $this->hasMany(CreditLedgerEntry::class);
+    }
+
     public function assertCanDelete(): void
     {
-        if ($this->exists && $this->generations()->exists()) {
+        // Ledger entries are financial evidence too, even without generations (D-047).
+        if ($this->exists && ($this->generations()->exists() || $this->creditLedgerEntries()->exists())) {
             throw new AccountHasGenerations;
         }
     }

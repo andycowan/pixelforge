@@ -7,6 +7,7 @@ use App\Enums\ProviderTransitionOutcome;
 use App\Exceptions\ProviderEvidenceConflict;
 use App\Http\Integrations\Pixelforge\Data\ProviderGeneration;
 use App\Jobs\PublishOutboxJob;
+use App\Models\CreditLedgerEntry;
 use App\Models\Generation;
 use App\Models\GenerationCharge;
 use App\Models\OutboxMessage;
@@ -52,10 +53,16 @@ final class ApplyProviderGeneration
 
                     return $outcome;
                 }
-                // Duplicate succeeded observations still validate/repair a missing settlement.
+                // Duplicate terminal observations still validate/repair a missing
+                // settlement; ledger effects are keyed per generation, so repeats are no-ops.
+                // Lock order: generation row, then the ledger insert's implicit owner key-share
+                // lock. Settlement never takes the owner FOR UPDATE lock (D-B05).
                 if ($generation->provider_status === ProviderGenerationStatus::Succeeded
                     && $provider->status === ProviderGenerationStatus::Succeeded) {
-                    GenerationCharge::ensureFor($generation, $this->pricing);
+                    CreditLedgerEntry::settle($generation, GenerationCharge::ensureFor($generation, $this->pricing));
+                } elseif ($generation->provider_status === ProviderGenerationStatus::Failed
+                    && $provider->status === ProviderGenerationStatus::Failed) {
+                    CreditLedgerEntry::releaseHoldFor($generation);
                 }
                 if ($generation->revision !== $revision) {
                     OutboxMessage::recordGenerationChange($generation);

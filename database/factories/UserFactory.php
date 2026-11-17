@@ -2,8 +2,10 @@
 
 namespace Database\Factories;
 
+use App\Models\CreditLedgerEntry;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
@@ -46,6 +48,16 @@ class UserFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
         ]);
+    }
+
+    /**
+     * Give the user demo credit through the real append-only ledger.
+     */
+    public function withCredit(int $nanodollars): static
+    {
+        return $this->afterCreating(fn (User $user) => DB::transaction(
+            fn () => CreditLedgerEntry::purchase($user, $nanodollars, (string) Str::uuid()),
+        ));
     }
 
     /* @chisel-2fa */

@@ -530,13 +530,16 @@ final class GenerationTest extends TestCase
 
         $migration = require database_path('migrations/2026_11_17_033944_create_generations_table.php');
         $financial = require database_path('migrations/2026_11_17_120000_create_generation_charges_and_outbox_tables.php');
+        $ledger = require database_path('migrations/2026_11_17_160000_create_credit_ledger_entries_table.php');
 
+        $ledger->down();
         $financial->down();
         $migration->down();
         $this->assertFalse(Schema::hasTable('generations'));
 
         $migration->up();
         $financial->up();
+        $ledger->up();
         $this->assertTrue(Schema::hasTable('generations'));
     }
 

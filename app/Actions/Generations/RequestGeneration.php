@@ -2,9 +2,12 @@
 
 namespace App\Actions\Generations;
 
+use App\Data\GenerationQuote;
 use App\Enums\GenerationQuality;
 use App\Enums\GenerationSize;
+use App\Exceptions\InsufficientCredit;
 use App\Jobs\SubmitGenerationJob;
+use App\Models\CreditLedgerEntry;
 use App\Models\Generation;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +25,10 @@ use Throwable;
  * hands the durable row to submission work. Repeated submissions of the same
  * options for the same user are served from the existing row, even when the
  * current prices have moved.
+ *
+ * A new request must be covered by available credit at its quoted maximum,
+ * which is held in the same owner-locked transaction (D-B02). An unaffordable
+ * request creates, holds and queues nothing.
  */
 final class RequestGeneration
 {
@@ -36,7 +43,7 @@ final class RequestGeneration
     /**
      * @param  array<string, mixed>  $options  Validated options: prompt, size, quality and optional reference_images
      *
-     * @throws ValidationException when the options contradict an existing submission token
+     * @throws ValidationException when the options contradict an existing submission token or credit is insufficient
      * @throws ServiceUnavailableHttpException when generation is not configured
      */
     public function execute(User $user, array $options, string $submissionToken): Generation
@@ -63,9 +70,39 @@ final class RequestGeneration
         // transaction that holds the owner lock.
         $quote = $this->quoteGeneration->execute($prompt, $size, $quality, $referenceImages);
 
-        [$generation, $created] = DB::transaction(function () use ($user, $token, $prompt, $size, $quality, $referenceImages, $quote, $fingerprint): array {
+        try {
+            [$generation, $created] = $this->persist($user, $token, $prompt, $size, $quality, $referenceImages, $quote, $fingerprint);
+        } catch (InsufficientCredit $exception) {
+            throw ValidationException::withMessages([
+                'credits' => sprintf(
+                    'Not enough credit: this request can cost up to $%s and your available balance is $%s. Buy credits to continue. Nothing was created or charged.',
+                    CreditLedgerEntry::formatCents($exception->requiredNanodollars),
+                    CreditLedgerEntry::formatCents($exception->availableNanodollars),
+                ),
+            ]);
+        }
+
+        if ($created) {
+            // The row is already durable. Queue dispatch is only an
+            // accelerator; scheduled recovery picks up a lost job.
+            $this->dispatchSubmission($generation);
+        }
+
+        return $generation;
+    }
+
+    /**
+     * @param  list<string>  $referenceImages
+     * @return array{0: Generation, 1: bool}
+     *
+     * @throws InsufficientCredit
+     */
+    private function persist(User $user, string $token, string $prompt, GenerationSize $size, GenerationQuality $quality, array $referenceImages, GenerationQuote $quote, string $fingerprint): array
+    {
+        return DB::transaction(function () use ($user, $token, $prompt, $size, $quality, $referenceImages, $quote, $fingerprint): array {
             // Serialise request creation per owner. Two tabs submitting at the
-            // same time cannot both insert the same submission token.
+            // same time cannot both insert the same submission token or both
+            // spend the same credit.
             User::query()->whereKey($user->getKey())->lockForUpdate()->first();
 
             $existing = $this->findOwned($user, $token);
@@ -90,16 +127,11 @@ final class RequestGeneration
             // worker. The submission request itself stays immutable.
             $generation->prepareSubmission($fingerprint);
 
+            // Throws before commit when credit is short, rolling back the row.
+            CreditLedgerEntry::holdFor($generation);
+
             return [$generation, true];
         });
-
-        if ($created) {
-            // The row is already durable. Queue dispatch is only an
-            // accelerator; scheduled recovery picks up a lost job.
-            $this->dispatchSubmission($generation);
-        }
-
-        return $generation;
     }
 
     /**
