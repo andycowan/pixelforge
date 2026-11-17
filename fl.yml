@@ -1,0 +1,12 @@
+project: pixelforge
+hostname: pixelforge.fl.wb
+
+resources:
+  postgres: true
+  s3: false
+
+services:
+  app:
+    routing:
+      host: pixelforge.fl.wb
+      paths: [/*]
