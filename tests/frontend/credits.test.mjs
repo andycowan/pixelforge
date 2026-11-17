@@ -6,9 +6,9 @@ import { readSubmissionError } from '../../resources/js/lib/generation.ts';
 void test('credit activity labels distinguish reservations from actual charges', () => {
     assert.deepEqual(creditEntryPresentation, {
         purchase: { label: 'Purchase', sign: '+' },
-        hold: { label: 'Hold for generation', sign: '−' },
+        hold: { label: 'Hold', sign: '−' },
         release: { label: 'Hold released', sign: '+' },
-        debit: { label: 'Charge for generation', sign: '−' },
+        debit: { label: 'Generation', sign: '−' },
     });
 });
 

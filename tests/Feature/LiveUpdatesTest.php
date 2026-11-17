@@ -80,6 +80,18 @@ final class LiveUpdatesTest extends TestCase
         $this->verified($response->getCookie(Mercure::COOKIE, decrypt: false)->getValue(), self::SUBSCRIBER_KEY);
     }
 
+    public function test_credits_page_subscribes_to_the_same_private_topic(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->get(route('credits.index'))
+            ->assertOk()
+            ->assertPlainCookie(Mercure::COOKIE)
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('live.hub', '/.well-known/mercure')
+                ->where('live.topic', "https://pixelforge.test/users/{$user->id}/generations"));
+    }
+
     public function test_logout_expires_the_stream_cookie(): void
     {
         $this->actingAs(User::factory()->create())

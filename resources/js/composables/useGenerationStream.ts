@@ -5,15 +5,20 @@ import { reconnectDelay } from '@/lib/generationStream';
 export type StreamState = 'connecting' | 'live' | 'reconnecting';
 
 /**
- * Subscribe to the user's private generation updates and refresh the
- * authoritative `generations` prop whenever anything may have changed.
+ * Subscribe to the user's private generation updates and refresh the given
+ * authoritative props (e.g. `generations`, `entries`, `credits`) whenever
+ * anything may have changed.
  *
  * Messages are invalidations only. Every (re)connect also refreshes, closing
  * the gap between page load and subscription and repairing missed messages.
  * A closed stream (expired cookie, hub restart, 429) is reopened after a prop
  * reload, which also renews the server-issued cookie.
  */
-export function useGenerationStream(hub: string, topic: string) {
+export function useGenerationStream(
+    hub: string,
+    topic: string,
+    only: string[],
+) {
     const state = ref<StreamState>('connecting');
 
     let source: EventSource | null = null;
@@ -31,7 +36,7 @@ export function useGenerationStream(hub: string, topic: string) {
         }
         reloading = true;
         router.reload({
-            only: ['generations', 'credits'],
+            only,
             onFinish: () => {
                 reloading = false;
                 if (reloadAgain && !disposed) {
@@ -65,11 +70,7 @@ export function useGenerationStream(hub: string, topic: string) {
             source = null;
             state.value = 'reconnecting';
             retryTimer = setTimeout(
-                () =>
-                    router.reload({
-                        only: ['generations', 'credits'],
-                        onFinish: connect,
-                    }),
+                () => router.reload({ only, onFinish: connect }),
                 reconnectDelay(failures++),
             );
         };

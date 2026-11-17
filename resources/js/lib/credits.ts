@@ -5,7 +5,7 @@ export const creditEntryPresentation: Record<
     { label: string; sign: string }
 > = {
     purchase: { label: 'Purchase', sign: '+' },
-    hold: { label: 'Hold for generation', sign: '−' },
+    hold: { label: 'Hold', sign: '−' },
     release: { label: 'Hold released', sign: '+' },
-    debit: { label: 'Charge for generation', sign: '−' },
+    debit: { label: 'Generation', sign: '−' },
 };

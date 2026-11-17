@@ -388,7 +388,22 @@ final class CreditBalanceTest extends TestCase
             ->where('entries.0.generation_id', $inProgress->id)
             ->where('entries.1.type', 'debit')
             ->where('entries.1.generation_id', $succeeded->id)
+            ->where('entries.1.prompt_excerpt', 'A lighthouse')
+            ->where('entries.2.prompt_excerpt', null)
             ->where('entries.2.type', 'purchase'));
+    }
+
+    public function test_activity_shows_a_short_single_line_prompt_excerpt(): void
+    {
+        $user = $this->userWithCredit(10_000_000_000);
+        $prompt = "A misty  harbour\nat dawn, ".str_repeat('with gulls ', 40);
+        $this->requestGeneration($user, [...$this->generationPayload(), 'prompt' => $prompt])->assertRedirect(route('generations.index'));
+
+        $excerpt = $this->actingAs($user)->get(route('credits.index'))->viewData('page')['props']['entries'][0]['prompt_excerpt'];
+        $this->assertStringStartsWith('A misty harbour at dawn, with gulls', $excerpt);
+        $this->assertStringEndsWith('…', $excerpt);
+        $this->assertLessThanOrEqual(61, mb_strlen($excerpt));
+        $this->assertStringNotContainsString("\n", $excerpt);
     }
 
     public function test_the_quote_reports_affordability_at_the_boundary_without_creating_anything(): void

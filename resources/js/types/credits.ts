@@ -13,5 +13,7 @@ export type CreditEntry = {
     type: 'purchase' | 'hold' | 'release' | 'debit';
     amount_usd: string;
     generation_id: string | null;
+    /** Short single-line excerpt of the generation's prompt. */
+    prompt_excerpt: string | null;
     created_at: string;
 };

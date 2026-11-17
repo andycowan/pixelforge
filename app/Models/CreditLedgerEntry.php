@@ -183,7 +183,7 @@ final class CreditLedgerEntry extends Model
         return self::query()->where('user_id', $user->getKey())
             ->whereNot(fn (Builder $query) => $query->whereIn('type', [CreditEntryType::Hold, CreditEntryType::Release])
                 ->whereIn('generation_id', self::query()->select('generation_id')->where('type', CreditEntryType::Release)))
-            ->orderByDesc('id')->limit($limit)->get()
+            ->with('generation:id,prompt')->orderByDesc('id')->limit($limit)->get()
             ->map(fn (self $entry): array => $entry->toHistoryArray())->values()->all();
     }
 
@@ -195,6 +195,8 @@ final class CreditLedgerEntry extends Model
             'type' => $this->type->value,
             'amount_usd' => self::format($this->amount_nanodollars),
             'generation_id' => $this->generation_id,
+            // A short single-line prompt excerpt identifies the image; the full prompt stays on Generations.
+            'prompt_excerpt' => $this->generation === null ? null : Str::limit(Str::squish($this->generation->prompt), 60, '…'),
             'created_at' => $this->created_at->toIso8601String(),
         ];
     }

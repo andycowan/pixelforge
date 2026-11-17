@@ -3,6 +3,7 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import GenerationCard from '@/components/generations/GenerationCard.vue';
 import GenerationPagination from '@/components/generations/GenerationPagination.vue';
+import LiveStatus from '@/components/LiveStatus.vue';
 import { useGenerationStream } from '@/composables/useGenerationStream';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
@@ -33,15 +34,7 @@ const props = defineProps<{
 const { state: streamState } = useGenerationStream(
     props.live.hub,
     props.live.topic,
-);
-
-const streamLabel = computed(
-    () =>
-        ({
-            connecting: 'Connecting to live updates…',
-            live: 'Live: statuses update automatically',
-            reconnecting: 'Reconnecting… use Refresh meanwhile',
-        })[streamState.value],
+    ['generations', 'credits'],
 );
 
 const refreshing = ref(false);
@@ -91,22 +84,10 @@ const hasItems = computed(() => props.generations.data.length > 0);
         <p
             class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
         >
-            <span
-                class="inline-flex items-center gap-1.5"
-                role="status"
-                aria-live="polite"
-            >
-                <span
-                    class="size-2 rounded-full"
-                    :class="
-                        streamState === 'live'
-                            ? 'bg-emerald-500'
-                            : 'animate-pulse bg-amber-500'
-                    "
-                    aria-hidden="true"
-                />
-                {{ streamLabel }}
-            </span>
+            <LiveStatus
+                :state="streamState"
+                live-label="Live: statuses update automatically"
+            />
             <span
                 >Estimated and actual amounts are exact USD strings calculated
                 and settled by the server.</span

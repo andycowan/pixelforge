@@ -2,6 +2,7 @@
 import { Head, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import Heading from '@/components/Heading.vue';
+import LiveStatus from '@/components/LiveStatus.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,6 +13,7 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
+import { useGenerationStream } from '@/composables/useGenerationStream';
 import { creditEntryPresentation } from '@/lib/credits';
 import { createSubmissionToken } from '@/lib/generation';
 import { formatSignedUsd, formatUsdAmount } from '@/lib/quote';
@@ -23,7 +25,18 @@ defineOptions({
     layout: { breadcrumbs: [{ title: 'Credits', href: index() }] },
 });
 
-defineProps<{ packages: CreditPackage[]; entries: CreditEntry[] }>();
+const props = defineProps<{
+    packages: CreditPackage[];
+    entries: CreditEntry[];
+    /** Same-origin hub path and this user's private topic. */
+    live: { hub: string; topic: string };
+}>();
+// Holds, releases and charges follow generation changes, so the same stream refreshes them.
+const { state: streamState } = useGenerationStream(
+    props.live.hub,
+    props.live.topic,
+    ['entries', 'credits'],
+);
 const page = usePage();
 const balance = computed(() => page.props.credits);
 const form = useForm({ package: '', idempotency_token: '' });
@@ -82,6 +95,12 @@ function timestamp(value: string): string {
             title="Credits"
             description="Your available credit, generation holds and recent activity. All amounts are in USD."
         />
+        <p class="text-xs text-muted-foreground">
+            <LiveStatus
+                :state="streamState"
+                live-label="Live: balance and activity update automatically"
+            />
+        </p>
 
         <Card>
             <CardHeader>
@@ -186,28 +205,27 @@ function timestamp(value: string): string {
             </CardHeader>
             <CardContent>
                 <ul v-if="entries.length" class="divide-y">
+                    <!-- Stacked on narrow screens; one aligned line from sm upwards. -->
                     <li
                         v-for="entry in entries"
                         :key="entry.id"
-                        class="flex flex-wrap items-start justify-between gap-3 py-4 first:pt-0 last:pb-0"
+                        class="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-baseline sm:gap-4"
                     >
-                        <div class="min-w-0">
-                            <p class="text-sm font-medium">
-                                {{ creditEntryPresentation[entry.type].label }}
-                            </p>
-                            <p
-                                v-if="entry.generation_id"
-                                class="mt-1 text-xs break-all text-muted-foreground"
-                            >
-                                Generation {{ entry.generation_id }}
-                            </p>
-                            <time
-                                :datetime="entry.created_at"
-                                class="mt-1 block text-xs text-muted-foreground"
-                                >{{ timestamp(entry.created_at) }}</time
-                            >
-                        </div>
-                        <span class="text-sm font-medium break-all tabular-nums"
+                        <span class="text-sm font-medium sm:w-24 sm:shrink-0">
+                            {{ creditEntryPresentation[entry.type].label }}
+                        </span>
+                        <span
+                            class="min-w-0 truncate text-sm text-muted-foreground empty:hidden sm:flex-1 sm:empty:block"
+                            :title="entry.prompt_excerpt ?? undefined"
+                            >{{ entry.prompt_excerpt }}</span
+                        >
+                        <time
+                            :datetime="entry.created_at"
+                            class="text-xs text-muted-foreground sm:shrink-0"
+                            >{{ timestamp(entry.created_at) }}</time
+                        >
+                        <span
+                            class="text-sm font-medium tabular-nums sm:w-32 sm:shrink-0 sm:text-right"
                             >{{ creditEntryPresentation[entry.type].sign }}${{
                                 formatUsdAmount(entry.amount_usd)
                             }}
