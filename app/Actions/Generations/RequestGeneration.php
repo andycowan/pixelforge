@@ -75,9 +75,9 @@ final class RequestGeneration
         } catch (InsufficientCredit $exception) {
             throw ValidationException::withMessages([
                 'credits' => sprintf(
-                    'Not enough credit: this request can cost up to $%s and your available balance is $%s. Buy credits to continue. Nothing was created or charged.',
-                    CreditLedgerEntry::formatCents($exception->requiredNanodollars),
-                    CreditLedgerEntry::formatCents($exception->availableNanodollars),
+                    'Not enough credit: this request can cost up to %s and your available balance is %s. Buy credits to continue. Nothing was created or charged.',
+                    CreditLedgerEntry::formatDollars($exception->requiredNanodollars),
+                    CreditLedgerEntry::formatDollars($exception->availableNanodollars),
                 ),
             ]);
         }

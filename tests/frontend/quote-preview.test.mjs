@@ -16,6 +16,7 @@ import {
     countCodePoints,
     flattenValidationErrors,
     formatCurrency,
+    formatSignedUsd,
     formatUsdAmount,
     isHttpUrl,
     isQuotePreview,
@@ -315,4 +316,10 @@ void test('accepts the flat contract and rejects envelopes or numeric money', ()
         }),
         false,
     );
+});
+
+void test('signed balances put the minus sign before the dollar sign', () => {
+    assert.equal(formatSignedUsd('-0.040000000'), '-$0.04');
+    assert.equal(formatSignedUsd('12.500000000'), '$12.50');
+    assert.equal(formatSignedUsd('0.000000000'), '$0.00');
 });

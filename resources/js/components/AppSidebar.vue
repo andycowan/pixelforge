@@ -14,7 +14,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { formatUsdAmount } from '@/lib/quote';
+import { formatSignedUsd } from '@/lib/quote';
 import { dashboard } from '@/routes';
 import { index as credits } from '@/routes/credits';
 import { index as generations } from '@/routes/generations';
@@ -37,7 +37,7 @@ const mainNavItems = computed<NavItem[]>(() => [
         href: credits(),
         icon: Coins,
         badge: page.props.credits
-            ? `$${formatUsdAmount(page.props.credits.available_usd)}`
+            ? formatSignedUsd(page.props.credits.available_usd)
             : undefined,
     },
 ]);

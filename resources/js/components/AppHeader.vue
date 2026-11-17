@@ -28,7 +28,7 @@ import {
 import UserMenuContent from '@/components/UserMenuContent.vue';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { getInitials } from '@/composables/useInitials';
-import { formatUsdAmount } from '@/lib/quote';
+import { formatSignedUsd } from '@/lib/quote';
 import { dashboard } from '@/routes';
 import { index as credits } from '@/routes/credits';
 import type { BreadcrumbItem, NavItem } from '@/types';
@@ -59,7 +59,7 @@ const mainNavItems = computed<NavItem[]>(() => [
         href: credits(),
         icon: Coins,
         badge: page.props.credits
-            ? `$${formatUsdAmount(page.props.credits.available_usd)}`
+            ? formatSignedUsd(page.props.credits.available_usd)
             : undefined,
     },
 ]);

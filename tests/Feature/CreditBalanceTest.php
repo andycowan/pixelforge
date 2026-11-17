@@ -243,7 +243,7 @@ final class CreditBalanceTest extends TestCase
         $this->assertSame(['available_usd' => '-0.040000000', 'held_usd' => '0.000000000'], CreditLedgerEntry::balanceFor($user));
 
         $this->requestGeneration($user)->assertStatus(422)->assertJsonValidationErrors(['credits']);
-        $this->assertStringContainsString('available balance is $-0.04', $this->requestGeneration($user)->json('errors.credits.0'));
+        $this->assertStringContainsString('available balance is -$0.04', $this->requestGeneration($user)->json('errors.credits.0'));
         $this->assertDatabaseCount('generations', 1);
     }
 
@@ -366,6 +366,29 @@ final class CreditBalanceTest extends TestCase
             ->where('packages.0', ['id' => 'usd_5', 'amount_usd' => '5.000000000']));
         $this->actingAs($other)->get(route('dashboard'))->assertInertia(fn (Assert $page) => $page
             ->where('credits.available_usd', '25.000000000'));
+    }
+
+    public function test_activity_hides_released_holds_but_keeps_active_holds_and_charges(): void
+    {
+        $user = $this->userWithCredit(10_000_000_000);
+        $succeeded = $this->requestedGeneration($user);
+        Saloon::fake([CreateGeneration::class => MockResponse::make($this->providerPayload($succeeded, 'succeeded'), 202)]);
+        $this->submit($succeeded);
+        $failed = $this->requestedGeneration($user);
+        Saloon::fake([CreateGeneration::class => MockResponse::make($this->providerPayload($failed, 'failed'), 202)]);
+        $this->submit($failed);
+        $inProgress = $this->requestedGeneration($user);
+
+        // The ledger keeps every entry; only the activity view nets released holds away.
+        // purchase + (hold, release, debit) + (hold, release) + hold
+        $this->assertSame(7, CreditLedgerEntry::query()->where('user_id', $user->id)->count());
+        $this->actingAs($user)->get(route('credits.index'))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->has('entries', 3)
+            ->where('entries.0.type', 'hold')
+            ->where('entries.0.generation_id', $inProgress->id)
+            ->where('entries.1.type', 'debit')
+            ->where('entries.1.generation_id', $succeeded->id)
+            ->where('entries.2.type', 'purchase'));
     }
 
     public function test_the_quote_reports_affordability_at_the_boundary_without_creating_anything(): void

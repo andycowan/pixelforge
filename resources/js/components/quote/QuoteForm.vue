@@ -24,7 +24,7 @@ import {
     MAX_REFERENCE_IMAGES,
     PROMPT_MAX_CODE_POINTS,
     countCodePoints,
-    formatUsdAmount,
+    formatSignedUsd,
     quoteQualityOptions,
     quoteSizeOptions,
 } from '@/lib/quote';
@@ -282,7 +282,7 @@ const formAnnouncement = computed(() =>
             >
                 Available:
                 <span class="font-medium text-foreground tabular-nums"
-                    >${{ formatUsdAmount(availableUsd) }} USD</span
+                    >{{ formatSignedUsd(availableUsd) }} USD</span
                 >
             </p>
             <Button

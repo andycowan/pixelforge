@@ -14,7 +14,7 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { creditEntryPresentation } from '@/lib/credits';
 import { createSubmissionToken } from '@/lib/generation';
-import { formatUsdAmount } from '@/lib/quote';
+import { formatSignedUsd, formatUsdAmount } from '@/lib/quote';
 import { index } from '@/routes/credits';
 import { store } from '@/routes/credits/purchases';
 import type { CreditEntry, CreditPackage } from '@/types/credits';
@@ -101,7 +101,7 @@ function timestamp(value: string): string {
                         <dd
                             class="mt-1 text-3xl font-semibold break-all tabular-nums"
                         >
-                            ${{ formatUsdAmount(balance.available_usd) }}
+                            {{ formatSignedUsd(balance.available_usd) }}
                         </dd>
                     </div>
                     <div>
@@ -179,9 +179,9 @@ function timestamp(value: string): string {
             <CardHeader>
                 <CardTitle>Recent activity</CardTitle>
                 <CardDescription
-                    >Your latest 50 credit entries, newest first. Holds reduce
-                    available credit; releases return it before the actual
-                    charge.</CardDescription
+                    >Your latest 50 credit entries, newest first. A hold
+                    reserves credit while a generation is in progress; once it
+                    finishes, only the actual charge is shown.</CardDescription
                 >
             </CardHeader>
             <CardContent>

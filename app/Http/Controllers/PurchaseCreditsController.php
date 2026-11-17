@@ -21,7 +21,7 @@ final class PurchaseCreditsController extends Controller
         Inertia::flash('toast', [
             'type' => 'success',
             'message' => $result['created']
-                ? sprintf('Added $%s of demo credit. No payment was taken.', CreditLedgerEntry::formatCents($result['entry']->amount_nanodollars))
+                ? sprintf('Added %s of demo credit. No payment was taken.', CreditLedgerEntry::formatDollars($result['entry']->amount_nanodollars))
                 : 'This purchase was already applied. Nothing more was added.',
         ]);
 

@@ -7,6 +7,7 @@ use App\Exceptions\InsufficientCredit;
 use App\Exceptions\ProviderEvidenceConflict;
 use App\Services\GenerationPricing;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\DB;
@@ -171,10 +172,18 @@ final class CreditLedgerEntry extends Model
         return self::record($hold->user_id, CreditEntryType::Debit, $charge->customer_cost_nanodollars, $generation->id);
     }
 
-    /** @return array<int, array<string, mixed>> */
+    /**
+     * Recent activity for display. A released hold nets to zero, so it and its
+     * release are omitted; active holds, purchases and debits remain (D-B13).
+     *
+     * @return array<int, array<string, mixed>>
+     */
     public static function recentFor(User $user, int $limit = 50): array
     {
-        return self::query()->where('user_id', $user->getKey())->orderByDesc('id')->limit($limit)->get()
+        return self::query()->where('user_id', $user->getKey())
+            ->whereNot(fn (Builder $query) => $query->whereIn('type', [CreditEntryType::Hold, CreditEntryType::Release])
+                ->whereIn('generation_id', self::query()->select('generation_id')->where('type', CreditEntryType::Release)))
+            ->orderByDesc('id')->limit($limit)->get()
             ->map(fn (self $entry): array => $entry->toHistoryArray())->values()->all();
     }
 
@@ -218,12 +227,12 @@ final class CreditLedgerEntry extends Model
         return ($nanodollars < 0 ? '-' : '').sprintf('%d.%09d', intdiv($magnitude, 1_000_000_000), $magnitude % 1_000_000_000);
     }
 
-    /** Whole-cent customer amount as dollars and cents, for messages (D-054). */
-    public static function formatCents(int $nanodollars): string
+    /** Whole-cent customer amount for messages (D-054): "$0.45", or "-$0.04" for an overrun balance. */
+    public static function formatDollars(int $nanodollars): string
     {
         $cents = intdiv(abs($nanodollars), GenerationPricing::CENT);
 
-        return ($nanodollars < 0 ? '-' : '').sprintf('%d.%02d', intdiv($cents, 100), $cents % 100);
+        return ($nanodollars < 0 ? '-' : '').sprintf('$%d.%02d', intdiv($cents, 100), $cents % 100);
     }
 
     private static function record(?int $userId, CreditEntryType $type, int $nanodollars, ?string $generationId = null, ?string $idempotencyKey = null): self

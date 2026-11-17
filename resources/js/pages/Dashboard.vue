@@ -7,7 +7,7 @@ import QuotePricePreview from '@/components/quote/QuotePricePreview.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useGenerationRequest } from '@/composables/useGenerationRequest';
 import { useQuotePreview } from '@/composables/useQuotePreview';
-import { formatUsdAmount } from '@/lib/quote';
+import { formatSignedUsd, formatUsdAmount } from '@/lib/quote';
 import { dashboard } from '@/routes';
 import type { QuoteFormInput } from '@/types/quote';
 
@@ -70,7 +70,7 @@ const generateHint = computed<string | null>(() => {
     }
 
     if (unaffordable.value && quote.value !== null) {
-        return `The maximum price of $${formatUsdAmount(quote.value.maximum_cost_usd)} exceeds your available balance${balance.value ? ` of $${formatUsdAmount(balance.value.available_usd)}` : ''}. Buy credits to continue.`;
+        return `The maximum price of $${formatUsdAmount(quote.value.maximum_cost_usd)} exceeds your available balance${balance.value ? ` of ${formatSignedUsd(balance.value.available_usd)}` : ''}. Buy credits to continue.`;
     }
 
     switch (status.value) {

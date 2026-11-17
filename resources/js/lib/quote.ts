@@ -154,6 +154,13 @@ export function formatUsdAmount(value: string): string {
     return `${whole}.${trimmed}`;
 }
 
+/** A dollar amount that may be negative (balances): "-$0.04", never "$-0.04". */
+export function formatSignedUsd(value: string): string {
+    const amount = formatUsdAmount(value);
+
+    return amount.startsWith('-') ? `-$${amount.slice(1)}` : `$${amount}`;
+}
+
 /** Token counts are not money; locale grouping is safe here. */
 export function formatTokenCount(value: number): string {
     return value.toLocaleString('en-US');
