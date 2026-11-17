@@ -43,6 +43,7 @@ export type QuoteRates = Record<QuoteRateCategory, string>;
 
 /** Flat quote response; there is no `data` envelope. */
 export type QuotePreview = {
+    affordable: boolean;
     currency: string;
     markup_percent: number;
     estimated_cost_usd: string;

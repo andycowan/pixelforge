@@ -26,6 +26,7 @@ import {
 } from '../../resources/js/lib/quote.ts';
 
 const QUOTE_RESPONSE = {
+    affordable: true,
     currency: 'usd',
     markup_percent: 25,
     estimated_cost_usd: '0.072206250',
@@ -193,6 +194,13 @@ void test('formats money textually without rounding or numeric conversion', () =
     assert.equal(formatUsdAmount('7'), '7.00');
     assert.equal(formatUsdAmount('0.000000010'), '0.00000001');
     assert.equal(formatUsdAmount('0.000000000'), '0.00');
+    assert.equal(formatUsdAmount('-0.050000000'), '-0.05');
+    assert.equal(formatUsdAmount('-5.000000000'), '-5.00');
+    assert.equal(
+        formatUsdAmount('-9007199254740993.000000001'),
+        '-9007199254740993.000000001',
+    );
+    assert.equal(formatUsdAmount('-0.000000001'), '-0.000000001');
     assert.equal(formatUsdAmount('not-money'), 'not-money');
     assert.equal(formatCurrency('usd'), 'USD');
 });
@@ -249,6 +257,22 @@ void test('falls back to the general message when no field errors exist', () => 
 
 void test('accepts the flat contract and rejects envelopes or numeric money', () => {
     assert.equal(isQuotePreview(QUOTE_RESPONSE), true);
+    assert.equal(
+        isQuotePreview({ ...QUOTE_RESPONSE, affordable: false }),
+        true,
+    );
+    assert.equal(
+        isQuotePreview({ ...QUOTE_RESPONSE, affordable: undefined }),
+        false,
+    );
+    assert.equal(
+        isQuotePreview({ ...QUOTE_RESPONSE, affordable: 'false' }),
+        false,
+    );
+    assert.equal(
+        isQuotePreview({ ...QUOTE_RESPONSE, maximum_cost_usd: '-0.05' }),
+        false,
+    );
     assert.equal(isQuotePreview({ data: QUOTE_RESPONSE }), false);
     assert.equal(isQuotePreview(null), false);
     assert.equal(

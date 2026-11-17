@@ -135,7 +135,7 @@ export function validateQuoteInput(input: QuoteFormInput): QuoteValidation {
  * money never looks like a token count.
  */
 export function formatUsdAmount(value: string): string {
-    if (!MONEY_PATTERN.test(value)) {
+    if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value)) {
         return value;
     }
 
@@ -205,7 +205,7 @@ export function isQuotePreview(value: unknown): value is QuotePreview {
         return false;
     }
 
-    if (value.currency !== 'usd') {
+    if (value.currency !== 'usd' || typeof value.affordable !== 'boolean') {
         return false;
     }
 

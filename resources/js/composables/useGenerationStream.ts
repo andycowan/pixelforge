@@ -31,7 +31,7 @@ export function useGenerationStream(hub: string, topic: string) {
         }
         reloading = true;
         router.reload({
-            only: ['generations'],
+            only: ['generations', 'credits'],
             onFinish: () => {
                 reloading = false;
                 if (reloadAgain && !disposed) {
@@ -66,7 +66,10 @@ export function useGenerationStream(hub: string, topic: string) {
             state.value = 'reconnecting';
             retryTimer = setTimeout(
                 () =>
-                    router.reload({ only: ['generations'], onFinish: connect }),
+                    router.reload({
+                        only: ['generations', 'credits'],
+                        onFinish: connect,
+                    }),
                 reconnectDelay(failures++),
             );
         };

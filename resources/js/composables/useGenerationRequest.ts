@@ -27,6 +27,8 @@ export type UseGenerationRequest = {
     submissionError: Ref<string | null>;
     /** Server field messages from a rejected generation request. */
     fieldErrors: ComputedRef<QuoteFieldErrors>;
+    /** The server rejected the last request for insufficient credit. */
+    creditsRejected: ComputedRef<boolean>;
 };
 
 const GENERATION_FIELDS = [
@@ -143,10 +145,17 @@ export function useGenerationRequest(
         });
     }
 
+    const creditsRejected = computed(
+        () =>
+            (form.errors as Record<string, string | undefined>).credits !==
+            undefined,
+    );
+
     return {
         submit,
         submitting,
         submissionError,
         fieldErrors,
+        creditsRejected,
     };
 }

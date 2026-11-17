@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Link } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -23,9 +24,11 @@ import {
     MAX_REFERENCE_IMAGES,
     PROMPT_MAX_CODE_POINTS,
     countCodePoints,
+    formatUsdAmount,
     quoteQualityOptions,
     quoteSizeOptions,
 } from '@/lib/quote';
+import { index as credits } from '@/routes/credits';
 import type { QuoteFieldErrors, QuoteFormInput } from '@/types/quote';
 
 const model = defineModel<QuoteFormInput>({ required: true });
@@ -41,6 +44,8 @@ const props = defineProps<{
     generateHint: string | null;
     /** Form-level failure from the last generation request. */
     generateError: string | null;
+    availableUsd: string | null;
+    needsCredits: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -271,6 +276,15 @@ const formAnnouncement = computed(() =>
         </CardContent>
 
         <CardFooter class="flex-col items-start gap-2">
+            <p
+                v-if="availableUsd !== null"
+                class="text-sm text-muted-foreground"
+            >
+                Available:
+                <span class="font-medium text-foreground tabular-nums"
+                    >${{ formatUsdAmount(availableUsd) }} USD</span
+                >
+            </p>
             <Button
                 type="button"
                 :disabled="!canGenerate || submitting"
@@ -282,10 +296,12 @@ const formAnnouncement = computed(() =>
                 {{ submitting ? 'Sending request…' : 'Generate' }}
             </Button>
             <p id="quote-generate-help" class="text-xs text-muted-foreground">
-                {{
-                    generateHint ??
-                    'Generating saves this request with its quoted price, then sends it to the provider in the background. The final charge follows the settled usage.'
-                }}
+                <template v-if="generateHint !== null"
+                    >{{ generateHint }}
+                </template>
+                Generating holds the maximum price from your balance until it
+                finishes. The hold is released and only the actual cost is
+                charged.
             </p>
             <p
                 v-if="generateError !== null"
@@ -294,6 +310,12 @@ const formAnnouncement = computed(() =>
             >
                 {{ generateError }}
             </p>
+            <Link
+                v-if="needsCredits"
+                :href="credits()"
+                class="text-sm font-medium underline underline-offset-4"
+                >Buy credits</Link
+            >
         </CardFooter>
     </Card>
 </template>

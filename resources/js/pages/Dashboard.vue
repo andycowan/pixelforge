@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import Heading from '@/components/Heading.vue';
 import QuoteForm from '@/components/quote/QuoteForm.vue';
@@ -7,6 +7,7 @@ import QuotePricePreview from '@/components/quote/QuotePricePreview.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useGenerationRequest } from '@/composables/useGenerationRequest';
 import { useQuotePreview } from '@/composables/useQuotePreview';
+import { formatUsdAmount } from '@/lib/quote';
 import { dashboard } from '@/routes';
 import type { QuoteFormInput } from '@/types/quote';
 
@@ -26,6 +27,9 @@ const props = defineProps<{
     generation_enabled: boolean;
 }>();
 
+const page = usePage();
+const balance = computed(() => page.props.credits);
+
 const input = ref<QuoteFormInput>({
     prompt: '',
     size: '1024x1024',
@@ -36,14 +40,19 @@ const input = ref<QuoteFormInput>({
 const { quote, errors, serverFieldErrors, failure, status, retry } =
     useQuotePreview(input);
 
+const unaffordable = computed(
+    () => status.value === 'ready' && quote.value?.affordable === false,
+);
+
 const canGenerate = computed(
     () =>
         props.generation_enabled &&
         status.value === 'ready' &&
-        quote.value !== null,
+        quote.value !== null &&
+        quote.value.affordable,
 );
 
-const { submit, submitting, submissionError, fieldErrors } =
+const { submit, submitting, submissionError, fieldErrors, creditsRejected } =
     useGenerationRequest(input, canGenerate);
 
 const mergedServerFieldErrors = computed(() => ({
@@ -58,6 +67,10 @@ const generateHint = computed<string | null>(() => {
 
     if (!props.generation_enabled) {
         return 'Generation is disabled because this server has no provider API key configured. Price previews still work.';
+    }
+
+    if (unaffordable.value && quote.value !== null) {
+        return `The maximum price of $${formatUsdAmount(quote.value.maximum_cost_usd)} exceeds your available balance${balance.value ? ` of $${formatUsdAmount(balance.value.available_usd)}` : ''}. Buy credits to continue.`;
     }
 
     switch (status.value) {
@@ -103,6 +116,8 @@ const generateHint = computed<string | null>(() => {
                 :submitting="submitting"
                 :generate-hint="generateHint"
                 :generate-error="submissionError"
+                :available-usd="balance?.available_usd ?? null"
+                :needs-credits="unaffordable || creditsRejected"
                 @generate="submit"
             />
 

@@ -215,7 +215,7 @@ export function decodePaginationLabel(label: string): string {
 
 /**
  * Field errors stay with their controls; anything else (for example a
- * conflicting submission token) is a form-level message.
+ * conflicting submission token or insufficient credits) is a form-level message.
  */
 export function readSubmissionError(
     errors: Record<string, unknown>,

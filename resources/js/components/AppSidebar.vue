@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
-import { History, LayoutGrid } from '@lucide/vue';
+import { Link, usePage } from '@inertiajs/vue3';
+import { Coins, History, LayoutGrid } from '@lucide/vue';
+import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -13,11 +14,14 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { formatUsdAmount } from '@/lib/quote';
 import { dashboard } from '@/routes';
+import { index as credits } from '@/routes/credits';
 import { index as generations } from '@/routes/generations';
 import type { NavItem } from '@/types';
 
-const mainNavItems: NavItem[] = [
+const page = usePage();
+const mainNavItems = computed<NavItem[]>(() => [
     {
         title: 'Workspace',
         href: dashboard(),
@@ -28,7 +32,15 @@ const mainNavItems: NavItem[] = [
         href: generations(),
         icon: History,
     },
-];
+    {
+        title: 'Credits',
+        href: credits(),
+        icon: Coins,
+        badge: page.props.credits
+            ? `$${formatUsdAmount(page.props.credits.available_usd)}`
+            : undefined,
+    },
+]);
 </script>
 
 <template>

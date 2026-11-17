@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { LayoutGrid, Menu } from '@lucide/vue';
+import { Coins, LayoutGrid, Menu } from '@lucide/vue';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
@@ -28,7 +28,9 @@ import {
 import UserMenuContent from '@/components/UserMenuContent.vue';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { getInitials } from '@/composables/useInitials';
+import { formatUsdAmount } from '@/lib/quote';
 import { dashboard } from '@/routes';
+import { index as credits } from '@/routes/credits';
 import type { BreadcrumbItem, NavItem } from '@/types';
 
 type Props = {
@@ -46,13 +48,21 @@ const { isCurrentUrl, whenCurrentUrl } = useCurrentUrl();
 const activeItemStyles =
     'text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100';
 
-const mainNavItems: NavItem[] = [
+const mainNavItems = computed<NavItem[]>(() => [
     {
         title: 'Workspace',
         href: dashboard(),
         icon: LayoutGrid,
     },
-];
+    {
+        title: 'Credits',
+        href: credits(),
+        icon: Coins,
+        badge: page.props.credits
+            ? `$${formatUsdAmount(page.props.credits.available_usd)}`
+            : undefined,
+    },
+]);
 </script>
 
 <template>
@@ -102,6 +112,11 @@ const mainNavItems: NavItem[] = [
                                             class="h-5 w-5"
                                         />
                                         {{ item.title }}
+                                        <span
+                                            v-if="item.badge"
+                                            class="text-xs tabular-nums"
+                                            >{{ item.badge }} available</span
+                                        >
                                     </Link>
                                 </nav>
                             </div>
@@ -141,6 +156,11 @@ const mainNavItems: NavItem[] = [
                                         class="mr-2 h-4 w-4"
                                     />
                                     {{ item.title }}
+                                    <span
+                                        v-if="item.badge"
+                                        class="ml-2 text-xs tabular-nums"
+                                        >{{ item.badge }} available</span
+                                    >
                                 </Link>
                                 <div
                                     v-if="isCurrentUrl(item.href)"

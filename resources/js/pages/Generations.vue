@@ -49,7 +49,7 @@ const refreshing = ref(false);
 /** Manual fallback while the live stream is connecting or reconnecting. */
 function refresh(): void {
     router.reload({
-        only: ['generations'],
+        only: ['generations', 'credits'],
         onStart: () => {
             refreshing.value = true;
         },

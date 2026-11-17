@@ -25,11 +25,27 @@ const { isCurrentUrl } = useCurrentUrl();
                 <SidebarMenuButton
                     as-child
                     :is-active="isCurrentUrl(item.href)"
-                    :tooltip="item.title"
+                    :tooltip="
+                        item.badge
+                            ? `${item.title}: ${item.badge} available`
+                            : item.title
+                    "
                 >
-                    <Link :href="item.href">
+                    <Link
+                        :href="item.href"
+                        :aria-label="
+                            item.badge
+                                ? `${item.title}: ${item.badge} available`
+                                : item.title
+                        "
+                    >
                         <component :is="item.icon" />
                         <span>{{ item.title }}</span>
+                        <span
+                            v-if="item.badge"
+                            class="ml-auto text-xs tabular-nums group-data-[collapsible=icon]:hidden"
+                            >{{ item.badge }}</span
+                        >
                     </Link>
                 </SidebarMenuButton>
             </SidebarMenuItem>
