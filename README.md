@@ -6,7 +6,7 @@ The whole app runs in one container: FrankenPHP serves PHP and Caddy, and the Vu
 
 ## Architecture
 
-See [the agreed architecture](docs/architecture.md) for layer ownership, Saloon integration, lifecycle and accounting invariants, durable webhook processing, private SSE, reporting and implementation order. It describes the target design; the current app is the authentication/runtime scaffold with a branded empty workspace; provider features are not implemented yet.
+See [the agreed architecture](docs/architecture.md) for layer ownership, Saloon integration, lifecycle and accounting invariants, durable webhook processing, private SSE, reporting and implementation order. It describes the target design. The current app has authentication, a branded empty workspace, a tested provider lifecycle machine and generation-request persistence. Generation UI, provider submission and billing are not implemented yet.
 
 ## First run
 

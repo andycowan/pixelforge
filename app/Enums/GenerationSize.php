@@ -1,0 +1,13 @@
+<?php
+
+namespace App\Enums;
+
+/**
+ * Supported output sizes, backed by the provider wire values.
+ */
+enum GenerationSize: string
+{
+    case Square = '1024x1024';
+    case Landscape = '1536x1024';
+    case Portrait = '1024x1536';
+}

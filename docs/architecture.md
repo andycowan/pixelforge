@@ -2,7 +2,7 @@
 
 Status: **accepted target architecture**. This records the decisions agreed during design; it is not a claim that the application already implements them.
 
-The existing app is the Laravel/Vue/Inertia authentication scaffold with a branded empty workspace, Postgres and a single FrankenPHP/Caddy app container behind Fairlead. Postgres supersedes the initial SQLite choice: it matches the employer's stack and supports the concurrent settlement workload without SQLite-specific write coordination. Mercure is present in the running image, but is not enabled. Saloon, generation workflows, accounting, background processes and live updates remain to be implemented.
+The existing app is the Laravel/Vue/Inertia authentication scaffold with a branded empty workspace, Postgres and a single FrankenPHP/Caddy app container behind Fairlead. Postgres supersedes the initial SQLite choice: it matches the employer's stack and supports the concurrent settlement workload without SQLite-specific write coordination. Mercure is present in the running image, but is not enabled. The state-owning provider lifecycle machine and generation-request persistence (model, schema, factory, owner scoping and safe history formatting) are implemented and tested. The model hydrates a fresh lifecycle machine but does not persist its mutations. Saloon, provider-result/settlement application, generation UI, background processes and live updates remain to be implemented.
 
 ## 1. Intent and scope
 
@@ -104,7 +104,22 @@ A retry budget ending does not prove the provider rejected a submission. Leave u
 
 Keep **local submission state** separate from **provider generation status**. Before acceptance is known, provider status/ID may be absent. The UI can describe submitting, waiting to retry, or awaiting confirmation without falsely claiming Pixelforge has queued the work.
 
-Provider progression is `queued → processing → succeeded | failed`. Intermediate events may be missing, so allow direct progress from queued to a terminal state. Terminal states never regress. A contradictory terminal payload is an operational inconsistency to investigate, not permission to rewrite a settled charge.
+Provider progression is `queued → processing → succeeded | failed`, enforced by an explicit model-owned state machine and a tested transition matrix. The first observation may already be processing or terminal; intermediate events may be missing. Same-state observations are idempotent transitions, but still require payload validation and settlement checks. Stale nonterminal observations are safely ignored/recorded rather than generating retry loops. Terminal states never regress. A contradictory terminal payload is an operational inconsistency to investigate, not permission to rewrite a settled charge.
+
+The state machine owns current provider state in memory, applies lifecycle observations and exposes capability guards, following the state-owning pattern rather than a stateless current/next classifier. Keep all state knowledge in the self-contained class, with no third-party package, speculative states or generic workflow engine. Keep database, HTTP, billing and publication side effects outside it; the model uses it to enforce guarded transitions and the shared apply action coordinates charge/notification intent in its transaction.
+
+The [provider machine](../app/StateMachines/ProviderGenerationStateMachine.php) is constructed with an optional current provider status (null means no prior observation). Named `applyQueued()`, `applyProcessing()`, `applySucceeded()` and `applyFailed()` methods evolve its private state. `status()`, `isTerminal()`, `isSucceeded()` and `isFailed()` read that state; `canProcess()` and `canComplete()` express new-transition eligibility. Processing is possible before observing processing/terminal; completion is possible before either terminal result. A guard being false does not turn an idempotent duplicate into an error.
+
+For example, a machine hydrated as queued can process, then complete; after `applyProcessing()` and `applySucceeded()`, its own `status()` is succeeded and `canComplete()` is false. Callers do not assign its next state themselves. [Pure unit tests](../tests/Unit/ProviderGenerationStateMachineTest.php) cover evolving state, guards and delivery sequences as well as the exhaustive observation matrix. Provider statuses remain string-backed enum values matching the API. Application methods retain diagnostic outcomes:
+
+| Outcome | Meaning | Caller responsibility |
+| --- | --- | --- |
+| `Advance` | First observation or valid forward movement; owned state updated | Validate payload before application and coordinate guarded persistence/settlement |
+| `Duplicate` | Same status observed again | Validate consistency and check idempotent settlement; do not assume the payload is harmless |
+| `Stale` | An earlier nonterminal status arrived late; owned state retained | Acknowledge/record the observation |
+| `Conflict` | Opposing terminal results; owned state retained | Surface the inconsistency without rewriting settled state |
+
+Only `Advance` changes the owned in-memory status; duplicate/stale/conflicting observations leave it intact. Named application methods and guards share one internal rule source. The machine neither persists itself nor validates rates/usage, and does not throw for normal out-of-order delivery. Hydrate a fresh instance from the locked model inside each transaction attempt; do not register mutable singleton instances or reuse an in-memory state after rollback. Exhaustive transition-matrix tests cover every current/observed combination; new enum cases require explicit review of the rules and tests.
 
 Core use cases:
 
@@ -128,6 +143,14 @@ Use Postgres in development, integration tests and production, with the Laravel 
 | `webhook_events` | Unique provider event ID, verified payload, received timestamp, processing outcome and retry/operator diagnostics |
 | `generation_charges` | One immutable settlement per successful generation: provider cost, customer charge, markup/rounding policy and provider completion timestamp |
 | `outbox_messages` | Durable user-scoped notification intent, stable identity, payload/revision, publication attempts and completion marker |
+
+### First persistence slice
+
+Create the owned generation request and immutable quote before any provider call. Generation IDs are ULIDs and double as provider idempotency keys; a separate per-user UUID submission token deduplicates browser requests. Store input/quote dictionaries as JSONB, money/counters as nonnegative BIGINTs and timestamps as timezone-aware values. Use PHP-backed enums with Postgres CHECK constraints, unique owner/token and provider identifiers, and an owner/history index. Preserve reference-image order and duplicates because they affect the submitted/billed request.
+
+The request model owns validation for non-HTTP callers, write-once request/quote rules, owner-scoped queries and an explicit history projection. Callers must supply the UUID submission token; the model does not invent a new deduplication identity on a retried request. Money inputs must be PHP integers, not coerced floats/numeric strings. Owner scopes require a persisted user so a missing user ID cannot query anonymised records. Monetary projection values are exact nine-decimal USD strings, never JavaScript numeric amounts; default JSON/array serialization uses the same conservative history projection. Internal submission tokens, provider identifiers/fingerprints, raw quote/evidence and operational diagnostics are not exposed by that projection. User deletion nulls ownership rather than cascading generation/financial deletion; detailed personal-data anonymisation/retention must be completed before exposing real generations with account deletion.
+
+Implement request storage independently from provider-result settlement. Until the shared apply/settlement handler exists, new model records must be pending/unobserved and direct provider-status/result writes must fail closed. Hydrating a fresh lifecycle machine from the model supports lifecycle queries but does not persist machine mutations automatically. Do not invent a successful generation without its charge, return fake actual prices or expose a half-built ingestion route. Reserved provider schema fields are not evidence that provider ingestion, billing, inbox/outbox or live UI is implemented.
 
 Required database-backed invariants:
 
