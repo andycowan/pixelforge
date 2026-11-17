@@ -117,6 +117,10 @@ final class GenerationPricing
         }
     }
 
+    /** One cent in nanodollars: customer prices are whole cents. */
+    public const CENT = 10_000_000;
+
+    /** Provider cost x 5/4, rounded up once to the next whole cent. */
     public function customerCost(mixed $providerCost): int
     {
         if (! is_int($providerCost) || $providerCost < 0) {
@@ -125,7 +129,8 @@ final class GenerationPricing
 
         try {
             return BigDecimal::of($providerCost)->multipliedBy(5)
-                ->dividedBy(4, scale: 0, roundingMode: RoundingMode::HalfUp)
+                ->dividedBy(4 * self::CENT, scale: 0, roundingMode: RoundingMode::Ceiling)
+                ->multipliedBy(self::CENT)
                 ->toInt();
         } catch (MathException $exception) {
             throw new PricingException('Customer cost exceeds the supported integer range.', previous: $exception);

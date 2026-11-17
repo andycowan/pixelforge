@@ -69,7 +69,7 @@ final class GenerationCharge extends Model
         if ($existing !== null) {
             if ($existing->provider_cost_nanodollars !== $providerCost || $existing->customer_cost_nanodollars !== $customerCost
                 || $existing->markup_numerator !== 5 || $existing->markup_denominator !== 4
-                || $existing->rounding !== 'half_up' || $existing->scale !== 9
+                || $existing->rounding !== 'ceiling' || $existing->scale !== 2
                 || ! $existing->provider_completed_at->equalTo($generation->provider_completed_at)) {
                 throw new ProviderEvidenceConflict('Existing settlement does not agree with provider evidence.');
             }
@@ -84,8 +84,8 @@ final class GenerationCharge extends Model
             $charge->customer_cost_nanodollars = $customerCost;
             $charge->markup_numerator = 5;
             $charge->markup_denominator = 4;
-            $charge->rounding = 'half_up';
-            $charge->scale = 9;
+            $charge->rounding = 'ceiling';
+            $charge->scale = 2;
             $charge->provider_completed_at = $generation->provider_completed_at;
             $charge->created_at = now();
             if (! $charge->saveOrFail()) {

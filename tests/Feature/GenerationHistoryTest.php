@@ -98,8 +98,8 @@ final class GenerationHistoryTest extends TestCase
                 ->where('generations.data.0.provider_status', null)
                 ->where('generations.data.0.actual_cost_usd', null)
                 ->where('generations.data.0.submission_message', null)
-                ->where('generations.data.0.estimated_cost_usd', '0.072206250')
-                ->where('generations.data.0.maximum_cost_usd', '0.086275000')
+                ->where('generations.data.0.estimated_cost_usd', '0.080000000')
+                ->where('generations.data.0.maximum_cost_usd', '0.090000000')
             );
     }
 
@@ -172,7 +172,7 @@ final class GenerationHistoryTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Generations')
                 ->where('generations.data.0.provider_status', 'succeeded')
-                ->where('generations.data.0.actual_cost_usd', '0.072206250')
+                ->where('generations.data.0.actual_cost_usd', '0.080000000')
                 ->where('generations.data.0.actual_cost_usd', $charge->customerCostUsd())
                 ->where('generations.data.0.image_url', 'https://example.com/result.png?signature=first')
                 ->where('generations.data.0.submission_message', null)

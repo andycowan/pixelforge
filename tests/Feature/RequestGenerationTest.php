@@ -162,10 +162,10 @@ final class RequestGenerationTest extends TestCase
 
         // The server's quote wins, not the browser's numbers. Two reference
         // images add 2 x 765 image tokens at $10/million:
-        // estimate (57,765,000 + 15,300,000) x 5/4 = 91,331,250
-        // maximum  (69,020,000 + 15,300,000) x 5/4 = 105,400,000
-        $this->assertSame(91_331_250, $generation->estimated_cost_nanodollars);
-        $this->assertSame(105_400_000, $generation->maximum_cost_nanodollars);
+        // estimate (57,765,000 + 15,300,000) x 5/4 = 91,331,250 -> $0.10
+        // maximum  (69,020,000 + 15,300,000) x 5/4 = 105,400,000 -> $0.11
+        $this->assertSame(100_000_000, $generation->estimated_cost_nanodollars);
+        $this->assertSame(110_000_000, $generation->maximum_cost_nanodollars);
         $this->assertNotSame(['input_text_tokens' => '0.0001'], $generation->quote_snapshot['rates']);
         $this->assertArrayHasKey('rates', $generation->quote_snapshot);
         $this->assertArrayHasKey('tokens', $generation->quote_snapshot);
@@ -223,7 +223,7 @@ final class RequestGenerationTest extends TestCase
 
         $this->assertSame('pending', $generation->submission_status->value);
         $this->assertSame(hash('sha256', self::API_KEY), $generation->provider_key_fingerprint);
-        $this->assertSame(72_206_250, $generation->estimated_cost_nanodollars);
+        $this->assertSame(80_000_000, $generation->estimated_cost_nanodollars);
 
         // The failure is reported for operators; scheduled recovery rescues the row.
         Log::shouldHaveReceived('error')->atLeast()->once();

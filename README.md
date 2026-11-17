@@ -33,7 +33,7 @@ The app key lives only in the ignored, host-owned `.env`. It is bind-mounted rea
 
 ## Pricing preview
 
-Sign in to the workspace to price a prompt, size, quality and up to four reference-image URLs. Estimates and conditional maximum prices include a 25% markup. The token/rate breakdown makes the calculation inspectable; USD amounts remain exact decimal strings in the browser.
+Sign in to the workspace to price a prompt, size, quality and up to four reference-image URLs. Estimates, conditional maximum prices and actual charges include a 25% markup and are rounded up once to the next whole cent; provider costs stay exact. The token/rate breakdown makes the calculation inspectable; USD amounts remain exact decimal strings in the browser.
 
 The authenticated, CSRF-protected `POST /generations/quote` endpoint validates inputs and fetches the public Pixelforge pricing catalogue through Saloon. No provider API key is needed yet. Validated rates/rules are cached for five minutes; failures are not cached and expired prices are not silently reused when the provider is unavailable. The maximum is conditional on the quoted rates, not a guaranteed cap if rates change before provider acceptance.
 
@@ -56,7 +56,7 @@ PIXELFORGE_WEBHOOK_SECRET=your-key-specific-signing-secret
 
 Configure that key's webhook URL in the provider dashboard as `https://your-public-host/webhooks/pixelforge`. The local Fairlead hostname is private and cannot receive real provider callbacks without a public tunnel; background retrieval still reconciles accepted generations. No tunnel is provisioned automatically. For local callbacks, use the webhook-only Tailscale Funnel setup below. Restart the app after environment changes.
 
-Submission and webhook work are durable database records. Retries keep the same idempotency key/options; duplicates and late observations cannot regress terminal state or create a second charge. Success settles against the provider's accepted rate snapshot and actual usage, with the 25% markup rounded once. Provider failure/known rejection is uncharged; an uncertain outcome remains unknown, not free or failed. Never start a replacement just because a submission response was lost—retry unchanged options or inspect Generations.
+Submission and webhook work are durable database records. Retries keep the same idempotency key/options; duplicates and late observations cannot regress terminal state or create a second charge. Success settles against the provider's accepted rate snapshot and actual usage, with the 25% markup, rounded up once to the next whole cent. Provider failure/known rejection is uncharged; an uncertain outcome remains unknown, not free or failed. Never start a replacement just because a submission response was lost—retry unchanged options or inspect Generations.
 
 The inbox verifies raw-body signatures before JSON decoding, enforces a five-minute timestamp tolerance and records one immutable row per event ID. Receipt returns success only after persistence; queue-dispatch failure is recovered by the scheduler. Unmatched/conflicting/invalid signed evidence stays inspectable in `webhook_events` rather than being assigned to another user.
 

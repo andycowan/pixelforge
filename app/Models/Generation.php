@@ -9,6 +9,7 @@ use App\Enums\ProviderGenerationStatus;
 use App\Enums\ProviderTransitionOutcome;
 use App\Exceptions\ProviderEvidenceConflict;
 use App\Http\Integrations\Pixelforge\Data\ProviderGeneration;
+use App\Services\GenerationPricing;
 use App\StateMachines\ProviderGenerationStateMachine;
 use Carbon\CarbonInterface;
 use Database\Factories\GenerationFactory;
@@ -605,6 +606,9 @@ class Generation extends Model
 
         if ($maximum < $estimated) {
             throw new InvalidArgumentException('The maximum generation cost cannot be below the estimate.');
+        }
+        if ($estimated % GenerationPricing::CENT !== 0 || $maximum % GenerationPricing::CENT !== 0) {
+            throw new InvalidArgumentException('Customer generation prices must be whole cents.');
         }
     }
 

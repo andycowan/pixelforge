@@ -21,7 +21,7 @@ final class GenerationSettlementTest extends TestCase
 {
     use GenerationEvidence, RefreshDatabase;
 
-    public function test_settlement_uses_accepted_not_quote_rates_and_exact_half_up_final_rounding(): void
+    public function test_settlement_uses_accepted_not_quote_rates_and_rounds_up_once_to_a_whole_cent(): void
     {
         $generation = $this->preparedGeneration();
         $rates = ['input_text_tokens' => '0.001', 'input_image_tokens' => '0', 'output_tokens' => '0', 'reasoning_tokens' => '0'];
@@ -31,12 +31,13 @@ final class GenerationSettlementTest extends TestCase
         $apply->execute($generation->id, $this->evidence($generation, changes: ['rates' => $rates, 'usage' => $usage]), $this->fingerprint());
         $charge = $generation->fresh()->charge;
         $this->assertSame(2, $charge->provider_cost_nanodollars);
-        $this->assertSame(3, $charge->customer_cost_nanodollars);
-        $this->assertSame('0.000000003', $generation->fresh()->toHistoryArray()['actual_cost_usd']);
+        // 2 provider nanodollars x 5/4 = 2.5 nanodollars, which still charges one whole cent.
+        $this->assertSame(10_000_000, $charge->customer_cost_nanodollars);
+        $this->assertSame('0.010000000', $generation->fresh()->toHistoryArray()['actual_cost_usd']);
         $this->assertSame(5, $charge->markup_numerator);
         $this->assertSame(4, $charge->markup_denominator);
-        $this->assertSame('half_up', $charge->rounding);
-        $this->assertSame(9, $charge->scale);
+        $this->assertSame('ceiling', $charge->rounding);
+        $this->assertSame(2, $charge->scale);
         $this->assertSame('2026-11-17T12:00:20+00:00', $charge->provider_completed_at->toIso8601String());
         $message = OutboxMessage::query()->latest('revision')->firstOrFail();
         $this->assertSame(['revision' => 2, 'generation_id' => $generation->id], $message->payload);
@@ -67,6 +68,39 @@ final class GenerationSettlementTest extends TestCase
         $this->assertDatabaseCount('outbox_messages', 1);
     }
 
+    public function test_whole_cent_migration_recomputes_existing_prices_exactly_in_both_directions(): void
+    {
+        $generation = $this->preparedGeneration();
+        app(ApplyProviderGeneration::class)->execute($generation->id, $this->evidence($generation), $this->fingerprint());
+        $provider = $generation->fresh()->charge->provider_cost_nanodollars;
+        $migration = require database_path('migrations/2026_11_17_150000_round_customer_prices_up_to_whole_cents.php');
+        $row = fn (): array => [
+            (array) DB::table('generation_charges')->first(['customer_cost_nanodollars', 'rounding', 'scale']),
+            (array) DB::table('generations')->first(['estimated_cost_nanodollars', 'maximum_cost_nanodollars']),
+        ];
+        $ceilingCents = fn (int $p): int => intdiv($p * 5 + 39_999_999, 40_000_000) * 10_000_000;
+        $current = $row();
+        $this->assertSame([['customer_cost_nanodollars' => $ceilingCents($provider), 'rounding' => 'ceiling', 'scale' => 2],
+            ['estimated_cost_nanodollars' => 80_000_000, 'maximum_cost_nanodollars' => 90_000_000]], $current);
+
+        $migration->down();
+        // Old policy: x 5/4 rounded half-up to the nanodollar, from the same stored inputs.
+        $this->assertSame([['customer_cost_nanodollars' => intdiv($provider * 5 + 2, 4), 'rounding' => 'half_up', 'scale' => 9],
+            ['estimated_cost_nanodollars' => 72_206_250, 'maximum_cost_nanodollars' => 86_275_000]], $row());
+        $this->assertSame('half_up', $generation->fresh()->quote_snapshot['policy']['rounding']);
+
+        $migration->up();
+        $this->assertSame($current, $row());
+        $this->assertSame(['ceiling', 2], [$generation->fresh()->quote_snapshot['policy']['rounding'], $generation->fresh()->quote_snapshot['policy']['precision']]);
+        try {
+            // A savepoint keeps the surrounding test transaction usable.
+            DB::transaction(fn () => DB::table('generation_charges')->update(['customer_cost_nanodollars' => $ceilingCents($provider) + 1]));
+            $this->fail('A charge off the whole-cent formula must be rejected.');
+        } catch (QueryException $exception) {
+            $this->assertSame('23514', $exception->getCode());
+        }
+    }
+
     public function test_settled_money_above_javascript_safe_integer_range_remains_an_exact_string(): void
     {
         $generation = $this->preparedGeneration();
@@ -76,8 +110,9 @@ final class GenerationSettlementTest extends TestCase
         ]);
         app(ApplyProviderGeneration::class)->execute($generation->id, $provider, $this->fingerprint());
         $this->assertSame(7_205_759_403_792_794, $generation->fresh()->charge->provider_cost_nanodollars);
-        $this->assertSame(9_007_199_254_740_993, $generation->fresh()->charge->customer_cost_nanodollars);
-        $this->assertSame('9007199.254740993', $generation->fresh()->toHistoryArray()['actual_cost_usd']);
+        // x 5/4 = 9,007,199,254,740,992.5, rounded up to the cent: still above JavaScript's safe integer range.
+        $this->assertSame(9_007_199_260_000_000, $generation->fresh()->charge->customer_cost_nanodollars);
+        $this->assertSame('9007199.260000000', $generation->fresh()->toHistoryArray()['actual_cost_usd']);
     }
 
     public function test_retained_ownerless_records_keep_settlement_and_nullable_outbox_ownership(): void

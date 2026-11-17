@@ -38,8 +38,8 @@ final readonly class GenerationQuote implements JsonSerializable
             'policy' => [
                 'currency' => 'USD',
                 'markup' => '5/4',
-                'rounding' => 'half_up',
-                'precision' => 9,
+                'rounding' => 'ceiling',
+                'precision' => 2,
                 'estimate_basis' => 'reasoning_midpoint_rounded_up',
             ],
         ];

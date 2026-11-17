@@ -32,10 +32,11 @@ final class GenerationPricingTest extends TestCase
         $this->assertSame(8000, $quote->tokenMaximum['reasoning_tokens']);
         $this->assertSame(330_050_000, $quote->estimatedProviderCostNanodollars);
         $this->assertSame(373_875_000, $quote->maximumProviderCostNanodollars);
-        $this->assertSame(412_562_500, $quote->estimatedCostNanodollars);
-        $this->assertSame(467_343_750, $quote->maximumCostNanodollars);
+        // 412,562,500 and 467,343,750 marked-up nanodollars round up to whole cents.
+        $this->assertSame(420_000_000, $quote->estimatedCostNanodollars);
+        $this->assertSame(470_000_000, $quote->maximumCostNanodollars);
         $this->assertSame('0.373875000', $quote->toArray()['provider_maximum_cost_usd']);
-        $this->assertSame('0.467343750', $quote->toArray()['maximum_cost_usd']);
+        $this->assertSame('0.470000000', $quote->toArray()['maximum_cost_usd']);
     }
 
     /** @return iterable<string, array{GenerationSize, GenerationQuality, int, int}> */
@@ -78,10 +79,11 @@ final class GenerationPricingTest extends TestCase
         $pricing = PixelforgePricing::fromArray(self::catalogue());
         $quote = (new GenerationPricing)->quote('A lighthouse', GenerationSize::Square, GenerationQuality::Medium, [], $pricing);
 
-        $this->assertSame(72_206_250, $quote->estimatedCostNanodollars);
-        $this->assertSame(86_275_000, $quote->maximumCostNanodollars);
-        $this->assertSame('0.072206250', $quote->toArray()['estimated_cost_usd']);
-        $this->assertSame('0.086275000', $quote->toArray()['maximum_cost_usd']);
+        $this->assertSame(80_000_000, $quote->estimatedCostNanodollars);
+        $this->assertSame(90_000_000, $quote->maximumCostNanodollars);
+        $this->assertSame('0.080000000', $quote->toArray()['estimated_cost_usd']);
+        $this->assertSame('0.090000000', $quote->toArray()['maximum_cost_usd']);
+        $this->assertSame(['ceiling', 2], [$quote->snapshot()['policy']['rounding'], $quote->snapshot()['policy']['precision']]);
         $this->assertSame('usd', $quote->toArray()['currency']);
         $this->assertSame(25, $quote->toArray()['markup_percent']);
         $this->assertSame($pricing->rates, $quote->snapshot()['rates']);
@@ -128,7 +130,8 @@ final class GenerationPricingTest extends TestCase
         $usage = ['input_text_tokens' => 12, 'input_image_tokens' => 765, 'output_tokens' => 6450, 'reasoning_tokens' => 3184, 'total_tokens' => 10411];
 
         $this->assertSame(305_510_000, $service->providerCost($usage, $rates));
-        $this->assertSame(381_887_500, $service->customerCost($service->providerCost($usage, $rates)));
+        // 381,887,500 marked-up nanodollars charge $0.39.
+        $this->assertSame(390_000_000, $service->customerCost($service->providerCost($usage, $rates)));
         $newRates = array_fill_keys(PixelforgePricing::TOKEN_TYPES, '0.00');
         $this->assertSame(0, $service->providerCost($usage, $newRates));
         $this->assertSame(305_510_000, $service->providerCost($usage, $rates));
@@ -137,16 +140,17 @@ final class GenerationPricingTest extends TestCase
     /** @return iterable<string, array{int, int}> */
     public static function markupCases(): iterable
     {
-        yield 'zero' => [0, 0];
-        yield 'one nanodollar' => [1, 1];
-        yield 'half rounds up' => [2, 3];
-        yield 'three quarters' => [3, 4];
-        yield 'exact integer' => [4, 5];
-        yield 'large exact input' => [9_007_199_254_740_993, 11_258_999_068_426_241];
+        yield 'zero stays free' => [0, 0];
+        yield 'one nanodollar charges a cent' => [1, 10_000_000];
+        yield 'just below a cent' => [7_999_999, 10_000_000];
+        yield 'exactly a cent is not rounded further' => [8_000_000, 10_000_000];
+        yield 'just above a cent rounds up' => [8_000_001, 20_000_000];
+        yield 'quarter nanodollar above a cent rounds up' => [8_000_000_001, 10_010_000_000];
+        yield 'large exact input' => [9_007_199_254_740_993, 11_258_999_070_000_000];
     }
 
     #[DataProvider('markupCases')]
-    public function test_markup_is_applied_once_with_half_up_rounding(int $provider, int $customer): void
+    public function test_markup_is_applied_once_then_rounded_up_to_a_whole_cent(int $provider, int $customer): void
     {
         $this->assertSame($customer, (new GenerationPricing)->customerCost($provider));
     }
@@ -166,7 +170,8 @@ final class GenerationPricingTest extends TestCase
         $rates = array_fill_keys(PixelforgePricing::TOKEN_TYPES, '0.001');
         $usage = ['input_text_tokens' => 1, 'input_image_tokens' => 1, 'output_tokens' => 0, 'reasoning_tokens' => 0];
         $service = new GenerationPricing;
-        $this->assertSame(3, $service->customerCost($service->providerCost($usage, $rates)));
+        // Two nanodollars marked up together charge one cent; rounding each category would charge two.
+        $this->assertSame(10_000_000, $service->customerCost($service->providerCost($usage, $rates)));
     }
 
     /** @return iterable<string, array{string, mixed}> */

@@ -63,8 +63,8 @@ final class GenerationQuoteTest extends TestCase
         $response->assertExactJson([
             'currency' => 'usd',
             'markup_percent' => 25,
-            'estimated_cost_usd' => '0.072206250',
-            'maximum_cost_usd' => '0.086275000',
+            'estimated_cost_usd' => '0.080000000',
+            'maximum_cost_usd' => '0.090000000',
             'provider_estimated_cost_usd' => '0.057765000',
             'provider_maximum_cost_usd' => '0.069020000',
             'token_estimate' => [
@@ -101,8 +101,8 @@ final class GenerationQuoteTest extends TestCase
 
         $response->assertJsonPath('token_estimate.input_image_tokens', 1530);
         $response->assertJsonPath('token_maximum.input_image_tokens', 1530);
-        $response->assertJsonPath('estimated_cost_usd', '0.091331250');
-        $response->assertJsonPath('maximum_cost_usd', '0.105400000');
+        $response->assertJsonPath('estimated_cost_usd', '0.100000000');
+        $response->assertJsonPath('maximum_cost_usd', '0.110000000');
         $this->assertDatabaseCount('generations', 0);
     }
 
@@ -138,8 +138,8 @@ final class GenerationQuoteTest extends TestCase
             'quote_snapshot' => ['rates' => [], 'policy' => []],
         ])->assertOk();
 
-        $response->assertJsonPath('estimated_cost_usd', '0.072206250');
-        $response->assertJsonPath('maximum_cost_usd', '0.086275000');
+        $response->assertJsonPath('estimated_cost_usd', '0.080000000');
+        $response->assertJsonPath('maximum_cost_usd', '0.090000000');
         $this->assertDatabaseCount('generations', 0);
     }
 

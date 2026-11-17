@@ -23,12 +23,12 @@ class GenerationFactory extends Factory
      * tokens. Provider rates are kept as exact decimal strings:
      * text 5.00, reference image 10.00, output image 40.00, reasoning 12.50
      * per million tokens. The customer price is the provider cost x 5/4,
-     * rounded half-up once:
+     * rounded up once to the next whole cent:
      *
      * estimate: 15,000 + 44,000,000 + 13,750,000 = 57,765,000
-     *           provider nanodollars x 5/4 = 72,206,250 customer nanodollars
+     *           provider nanodollars x 5/4 = 72,206,250 -> $0.08 = 80,000,000
      * maximum:  20,000 + 44,000,000 + 25,000,000 = 69,020,000
-     *           provider nanodollars x 5/4 = 86,275,000 customer nanodollars
+     *           provider nanodollars x 5/4 = 86,275,000 -> $0.09 = 90,000,000
      *
      * @return array<string, mixed>
      */
@@ -54,19 +54,23 @@ class GenerationFactory extends Factory
                     'output_tokens' => 1100,
                     'reasoning_tokens' => 1100,
                 ],
+                // Same shape as GenerationQuote::snapshot(), so prices are recomputable from it.
                 'bounds' => [
-                    'text_max' => 4,
-                    'reasoning_max' => 2000,
+                    'input_text_tokens' => 4,
+                    'input_image_tokens' => 0,
+                    'output_tokens' => 1100,
+                    'reasoning_tokens' => 2000,
                 ],
                 'policy' => [
                     'currency' => 'USD',
                     'markup' => '5/4',
-                    'rounding' => 'half_up',
-                    'estimate_basis' => 'reasoning_midpoint',
+                    'rounding' => 'ceiling',
+                    'precision' => 2,
+                    'estimate_basis' => 'reasoning_midpoint_rounded_up',
                 ],
             ],
-            'estimated_cost_nanodollars' => 72_206_250,
-            'maximum_cost_nanodollars' => 86_275_000,
+            'estimated_cost_nanodollars' => 80_000_000,
+            'maximum_cost_nanodollars' => 90_000_000,
         ];
     }
 }

@@ -129,8 +129,8 @@ final class GenerationTest extends TestCase
             'reference_images' => [],
             'submission_status' => 'pending',
             'provider_status' => null,
-            'estimated_cost_usd' => '0.072206250',
-            'maximum_cost_usd' => '0.086275000',
+            'estimated_cost_usd' => '0.080000000',
+            'maximum_cost_usd' => '0.090000000',
             'actual_cost_usd' => null,
             'submission_message' => null,
             'image_url' => null,
@@ -149,26 +149,26 @@ final class GenerationTest extends TestCase
         $this->assertSame('0.000000000', $zero->toHistoryArray()['estimated_cost_usd']);
         $this->assertSame('0.000000000', $zero->toHistoryArray()['maximum_cost_usd']);
 
-        $subcent = Generation::factory()->for($this->user)->create([
-            'estimated_cost_nanodollars' => 1,
-            'maximum_cost_nanodollars' => 1,
+        $cent = Generation::factory()->for($this->user)->create([
+            'estimated_cost_nanodollars' => 10_000_000,
+            'maximum_cost_nanodollars' => 10_000_000,
         ]);
-        $this->assertSame('0.000000001', $subcent->toHistoryArray()['estimated_cost_usd']);
+        $this->assertSame('0.010000000', $cent->toHistoryArray()['estimated_cost_usd']);
 
-        // 9,007,199,254,740,993 is above JavaScript's safe integer limit.
+        // 9,007,199,260,000,000 is above JavaScript's safe integer limit.
         $large = Generation::factory()->for($this->user)->create([
-            'estimated_cost_nanodollars' => 9_007_199_254_740_993,
-            'maximum_cost_nanodollars' => 9_007_199_254_740_993,
+            'estimated_cost_nanodollars' => 9_007_199_260_000_000,
+            'maximum_cost_nanodollars' => 9_007_199_260_000_000,
         ]);
-        $this->assertSame('9007199.254740993', $large->toHistoryArray()['estimated_cost_usd']);
-        $this->assertSame('9007199.254740993', $large->toHistoryArray()['maximum_cost_usd']);
+        $this->assertSame('9007199.260000000', $large->toHistoryArray()['estimated_cost_usd']);
+        $this->assertSame('9007199.260000000', $large->toHistoryArray()['maximum_cost_usd']);
     }
 
     public function test_default_serialization_uses_the_safe_history_projection(): void
     {
         $generation = Generation::factory()->for($this->user)->create([
-            'estimated_cost_nanodollars' => 9_007_199_254_740_993,
-            'maximum_cost_nanodollars' => 9_007_199_254_740_993,
+            'estimated_cost_nanodollars' => 9_007_199_260_000_000,
+            'maximum_cost_nanodollars' => 9_007_199_260_000_000,
         ]);
         $generation->load('user');
 
@@ -216,7 +216,7 @@ final class GenerationTest extends TestCase
         $this->assertSame('A lighthouse', $row->prompt);
         $this->assertSame($this->user->id, $row->user_id);
         $this->assertSame('pending', $row->submission_status);
-        $this->assertSame(72_206_250, $row->estimated_cost_nanodollars);
+        $this->assertSame(80_000_000, $row->estimated_cost_nanodollars);
     }
 
     public function test_provider_and_submission_fields_cannot_be_mass_assigned_on_create(): void
@@ -451,6 +451,8 @@ final class GenerationTest extends TestCase
             ['estimated_cost_nanodollars' => '100'],
             ['maximum_cost_nanodollars' => -1],
             ['estimated_cost_nanodollars' => 2, 'maximum_cost_nanodollars' => 1],
+            ['estimated_cost_nanodollars' => 72_206_250],
+            ['maximum_cost_nanodollars' => 90_000_001],
         ];
 
         foreach ($cases as $attributes) {
@@ -483,6 +485,8 @@ final class GenerationTest extends TestCase
             ['estimated_cost_nanodollars' => -1],
             ['maximum_cost_nanodollars' => -1],
             ['estimated_cost_nanodollars' => 2, 'maximum_cost_nanodollars' => 1],
+            ['estimated_cost_nanodollars' => 72_206_250],
+            ['maximum_cost_nanodollars' => 90_000_001],
             ['submission_attempts' => -1],
             ['revision' => -1],
             ['reference_images' => json_encode('not-an-array', JSON_THROW_ON_ERROR)],
@@ -550,8 +554,8 @@ final class GenerationTest extends TestCase
             'quality' => 'medium',
             'reference_images' => '[]',
             'quote_snapshot' => json_encode(['policy' => ['markup' => '5/4']], JSON_THROW_ON_ERROR),
-            'estimated_cost_nanodollars' => 72_206_250,
-            'maximum_cost_nanodollars' => 86_275_000,
+            'estimated_cost_nanodollars' => 80_000_000,
+            'maximum_cost_nanodollars' => 90_000_000,
         ], $overrides));
     }
 

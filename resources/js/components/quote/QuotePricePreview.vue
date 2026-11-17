@@ -175,11 +175,12 @@ function retry(): void {
                                 Estimated price
                             </p>
                             <PriceInfoTooltip label="About the estimated price">
-                                Includes a 25% markup over the provider's cost.
-                                The estimate uses the provider's estimated text
-                                tokens and a midpoint reasoning-token count. The
-                                final charge follows actual token usage, so it
-                                may be higher or lower than this estimate.
+                                Includes a 25% markup over the provider's cost,
+                                rounded up to the next cent. The estimate uses
+                                the provider's estimated text tokens and a
+                                midpoint reasoning-token count. The final charge
+                                follows actual token usage, so it may be higher
+                                or lower than this estimate.
                             </PriceInfoTooltip>
                         </div>
                         <div
@@ -206,11 +207,12 @@ function retry(): void {
                                 Maximum price
                             </p>
                             <PriceInfoTooltip label="About the maximum price">
-                                Includes a 25% markup over the provider's cost.
-                                This is an upper bound at the quoted rates. If
-                                the provider changes its pricing before a
-                                generation is accepted, the bound changes too.
-                                It is not a guaranteed price cap.
+                                Includes a 25% markup over the provider's cost,
+                                rounded up to the next cent. This is an upper
+                                bound at the quoted rates. If the provider
+                                changes its pricing before a generation is
+                                accepted, the bound changes too. It is not a
+                                guaranteed price cap.
                             </PriceInfoTooltip>
                         </div>
                         <div
