@@ -1,0 +1,44 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Enums\GenerationSubmissionStatus;
+use App\Services\GenerationSubmissionPolicy;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\TestCase;
+
+final class GenerationSubmissionPolicyTest extends TestCase
+{
+    #[DataProvider('classifications')]
+    public function test_error_classification_preserves_uncertainty(string $code, bool $uncertain, GenerationSubmissionStatus $status, bool $retry): void
+    {
+        $result = (new GenerationSubmissionPolicy)->problem($code, $uncertain, 1);
+        $this->assertSame($status, $result['status']);
+        $this->assertSame($retry, $result['error']['retryable']);
+        $this->assertSame($retry, $result['delay'] !== null);
+    }
+
+    public static function classifications(): array
+    {
+        $cases = [];
+        foreach (['validation_failed', 'content_policy_violation', 'rate_limit_exceeded', 'concurrency_limit_exceeded', 'daily_limit_exceeded', 'invalid_api_key', 'overloaded', 'idempotency_key_reused', 'transport_error', 'invalid_provider_response', 'surprise'] as $code) {
+            foreach ([false, true] as $uncertain) {
+                $status = $uncertain || in_array($code, ['idempotency_key_reused', 'transport_error', 'invalid_provider_response', 'surprise'], true) ? GenerationSubmissionStatus::Uncertain : (in_array($code, ['validation_failed', 'content_policy_violation'], true) ? GenerationSubmissionStatus::Rejected : GenerationSubmissionStatus::Pending);
+                $cases[$code.($uncertain ? '-uncertain' : '-first')] = [$code, $uncertain, $status, in_array($code, ['rate_limit_exceeded', 'concurrency_limit_exceeded', 'overloaded', 'transport_error', 'invalid_provider_response'], true)];
+            }
+        }
+
+        return $cases;
+    }
+
+    public function test_retry_budget_backoff_and_retry_after_are_bounded(): void
+    {
+        $policy = new GenerationSubmissionPolicy;
+        $this->assertGreaterThanOrEqual(120, $policy->problem('rate_limit_exceeded', false, 1, '120')['delay']);
+        $this->assertGreaterThanOrEqual(60, $policy->problem('transport_error', true, 4)['delay']);
+        $this->assertNull($policy->problem('transport_error', true, 5)['delay']);
+        $this->assertNull($policy->problem('overloaded', false, 1, '999999999')['delay']);
+        $this->assertLessThan(10, $policy->problem('overloaded', false, 1, '-5')['delay']);
+        $this->assertSame('unknown_provider_error', $policy->problem('SECRET BODY', true, 1)['error']['code']);
+    }
+}

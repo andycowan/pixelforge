@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Exceptions\AccountHasGenerations;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Laravel\Fortify\Contracts\PasskeyUser;
 use Laravel\Fortify\PasskeyAuthenticatable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -41,6 +43,27 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     public function generations(): HasMany
     {
         return $this->hasMany(Generation::class);
+    }
+
+    public function assertCanDelete(): void
+    {
+        if ($this->exists && $this->generations()->exists()) {
+            throw new AccountHasGenerations;
+        }
+    }
+
+    public function delete(): ?bool
+    {
+        if (! $this->exists) {
+            return parent::delete();
+        }
+
+        return DB::transaction(function (): ?bool {
+            $locked = self::query()->whereKey($this->getKey())->lockForUpdate()->first();
+            $locked?->assertCanDelete();
+
+            return parent::delete();
+        });
     }
 
     /**

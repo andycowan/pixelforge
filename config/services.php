@@ -16,6 +16,15 @@ return [
 
     'pixelforge' => [
         'base_url' => env('PIXELFORGE_BASE_URL', 'https://pixelforge.promptedit.dev/v1'),
+        'api_key' => env('PIXELFORGE_API_KEY'),
+        'webhook_secret' => env('PIXELFORGE_WEBHOOK_SECRET'),
+    ],
+
+    'mercure' => [
+        'publisher_key' => env('MERCURE_PUBLISHER_JWT_KEY'),
+        'subscriber_key' => env('MERCURE_SUBSCRIBER_JWT_KEY'),
+        // Same container; the public audience is pinned in the Caddyfile.
+        'internal_url' => env('MERCURE_INTERNAL_URL', 'http://127.0.0.1/.well-known/mercure'),
     ],
 
     'postmark' => [

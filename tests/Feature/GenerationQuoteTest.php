@@ -292,7 +292,7 @@ final class GenerationQuoteTest extends TestCase
         $this->assertContains('web', $middleware);
         $this->assertContains('auth', $middleware);
         $this->assertContains('verified', $middleware);
-        $this->assertContains('throttle:120,1', $middleware);
+        $this->assertContains('throttle:120,1,generation-quotes:', $middleware);
     }
 
     public function test_the_quote_endpoint_is_post_only(): void

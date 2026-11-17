@@ -15,7 +15,7 @@ export const PROMPT_MAX_CODE_POINTS = 4000;
 
 export const MAX_REFERENCE_IMAGES = 4;
 
-export const QUOTE_DEBOUNCE_MS = 400;
+export const QUOTE_DEBOUNCE_MS = 1000;
 
 export const QUOTE_REQUEST_TIMEOUT_MS = 10_000;
 

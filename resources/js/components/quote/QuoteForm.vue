@@ -11,6 +11,7 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
 import {
     Select,
     SelectContent,
@@ -33,6 +34,17 @@ const props = defineProps<{
     errors: QuoteFieldErrors;
     /** Server field messages, which are shown even before a field is blurred. */
     serverFieldErrors: QuoteFieldErrors;
+    /** The server re-quotes and validates again, so this is only an affordance. */
+    canGenerate: boolean;
+    submitting: boolean;
+    /** Why Generate is unavailable right now; null when it is available. */
+    generateHint: string | null;
+    /** Form-level failure from the last generation request. */
+    generateError: string | null;
+}>();
+
+const emit = defineEmits<{
+    generate: [];
 }>();
 
 const prompt = computed({
@@ -105,8 +117,9 @@ const formAnnouncement = computed(() =>
         <CardHeader>
             <CardTitle>Describe an image</CardTitle>
             <CardDescription>
-                Choose a prompt, output size and quality. A price preview is
-                requested from the server; nothing is generated or saved.
+                Choose a prompt, output size and quality. Prices come from the
+                server, which re-quotes this request again before anything is
+                saved or generated.
             </CardDescription>
         </CardHeader>
 
@@ -131,6 +144,7 @@ const formAnnouncement = computed(() =>
                     v-model="prompt"
                     name="prompt"
                     rows="6"
+                    :disabled="submitting"
                     class="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:aria-invalid:ring-destructive/40"
                     :aria-invalid="Boolean(errors.prompt)"
                     aria-describedby="quote-prompt-help quote-prompt-error"
@@ -165,6 +179,7 @@ const formAnnouncement = computed(() =>
                             :value="option.value"
                             :checked="model.size === option.value"
                             class="sr-only"
+                            :disabled="submitting"
                             @change="selectSize(option.value)"
                         />
                         <span class="font-medium">{{ option.label }}</span>
@@ -185,6 +200,7 @@ const formAnnouncement = computed(() =>
                 >
                 <Select
                     :model-value="model.quality"
+                    :disabled="submitting"
                     @update:model-value="updateQuality"
                 >
                     <SelectTrigger
@@ -230,6 +246,7 @@ const formAnnouncement = computed(() =>
                     v-model="referenceUrls"
                     name="reference_images"
                     rows="3"
+                    :disabled="submitting"
                     spellcheck="false"
                     autocomplete="off"
                     class="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:aria-invalid:ring-destructive/40"
@@ -256,15 +273,26 @@ const formAnnouncement = computed(() =>
         <CardFooter class="flex-col items-start gap-2">
             <Button
                 type="button"
-                disabled
+                :disabled="!canGenerate || submitting"
+                :aria-busy="submitting"
                 aria-describedby="quote-generate-help"
+                @click="emit('generate')"
             >
-                Generate
+                <Spinner v-if="submitting" class="size-4" />
+                {{ submitting ? 'Sending request…' : 'Generate' }}
             </Button>
             <p id="quote-generate-help" class="text-xs text-muted-foreground">
-                Image generation submission is coming next. Today this page only
-                prices a prompt: no image is generated, no generation record is
-                created and nothing is charged.
+                {{
+                    generateHint ??
+                    'Generating saves this request with its quoted price, then sends it to the provider in the background. The final charge follows the settled usage.'
+                }}
+            </p>
+            <p
+                v-if="generateError !== null"
+                class="text-sm text-destructive"
+                role="alert"
+            >
+                {{ generateError }}
             </p>
         </CardFooter>
     </Card>

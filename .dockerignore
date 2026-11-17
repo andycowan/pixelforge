@@ -1,6 +1,7 @@
 .git
 .github
 .playwright-cli
+**/__pycache__
 bootstrap/cache/*.php
 .env
 .env.*

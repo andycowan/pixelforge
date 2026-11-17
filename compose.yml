@@ -15,6 +15,7 @@ services:
               read_only: true
               bind:
                   create_host_path: false
+        stop_grace_period: 70s
         restart: unless-stopped
 
 volumes:

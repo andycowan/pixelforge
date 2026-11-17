@@ -9,13 +9,14 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * HTTP validation for a quote preview.
+ * HTTP validation for generation options.
  *
- * Only the generation options are accepted. Client-supplied money, quotes or
+ * Shared by the read-only quote preview and the real generation request. Only
+ * the generation options are accepted. Client-supplied money, quotes or
  * snapshots have no rules and are never read, keeping this request aligned
  * with what the generation model will accept.
  */
-final class GenerationQuoteRequest extends FormRequest
+class GenerationQuoteRequest extends FormRequest
 {
     public function authorize(): bool
     {

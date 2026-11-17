@@ -2,20 +2,30 @@
 
 namespace App\Http\Integrations\Pixelforge;
 
+use Saloon\Contracts\Authenticator;
+use Saloon\Http\Auth\TokenAuthenticator;
 use Saloon\Http\Connector;
 use Saloon\Traits\Plugins\HasTimeout;
 
 /**
- * Pixelforge provider API. The pricing endpoint is public, so this phase
- * deliberately carries no credentials.
+ * Pixelforge provider API. Pricing is public, so a connector created without
+ * an explicit key stays anonymous; generation calls pass the configured key.
  */
 final class PixelforgeConnector extends Connector
 {
     use HasTimeout;
 
+    private readonly ?string $apiKey;
+
+    public function __construct(?string $apiKey = null)
+    {
+        $apiKey = $apiKey === null ? null : trim($apiKey);
+        $this->apiKey = $apiKey === '' ? null : $apiKey;
+    }
+
     /**
-     * Bound a pricing call tightly: this work sits in front of a browser
-     * request, and no automatic Saloon retries are configured.
+     * Bound provider calls tightly; no automatic Saloon retries are
+     * configured, so submission timing stays with the worker.
      */
     protected float $connectTimeout = 3.0;
 
@@ -34,5 +44,10 @@ final class PixelforgeConnector extends Connector
         return [
             'Accept' => 'application/json',
         ];
+    }
+
+    protected function defaultAuth(): ?Authenticator
+    {
+        return $this->apiKey === null ? null : new TokenAuthenticator($this->apiKey);
     }
 }

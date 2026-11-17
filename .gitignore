@@ -1,5 +1,6 @@
 /.phpunit.cache
 /.playwright-cli/
+__pycache__/
 /bootstrap/ssr
 /node_modules
 /public/build

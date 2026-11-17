@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Services\Mercure;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -23,7 +24,14 @@ return Application::configure(basePath: dirname(__DIR__))
             '192.168.0.0/16',
         ]);
 
-        $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
+        // The Mercure hub must read its access-token cookie as a plain JWT.
+        $middleware->encryptCookies(except: ['appearance', 'sidebar_state', Mercure::COOKIE]);
+
+        // Verify the signed raw webhook before input middleware decodes its JSON.
+        $isWebhook = fn (Request $request): bool => $request->is('webhooks/pixelforge');
+        $middleware->trimStrings(except: [$isWebhook]);
+        $middleware->convertEmptyStringsToNull(except: [$isWebhook]);
+        $middleware->preventRequestForgery(except: ['webhooks/pixelforge']);
 
         $middleware->web(append: [
             HandleAppearance::class,

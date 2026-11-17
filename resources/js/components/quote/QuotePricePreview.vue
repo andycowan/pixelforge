@@ -236,10 +236,10 @@ function retry(): void {
                 <div class="flex flex-col gap-3 text-sm text-muted-foreground">
                     <p>
                         The actual price is only known once a generation
-                        finishes and the exact usage is settled; failed
-                        generations will not be charged. That settlement
-                        workflow does not exist yet, so this is a preview only —
-                        nothing is generated, stored or charged.
+                        finishes and its exact usage is settled; failed
+                        generations are not charged. A quote on its own never
+                        creates a generation, reserves credit or charges
+                        anything — generating is a separate, deliberate step.
                     </p>
                 </div>
 

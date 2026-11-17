@@ -80,7 +80,7 @@ final class GenerationTest extends TestCase
     {
         $owner = User::factory()->create();
         $generation = Generation::factory()->for($owner)->create();
-        $owner->delete();
+        DB::table('users')->where('id', $owner->id)->delete();
 
         $this->assertDatabaseHas('generations', ['id' => $generation->id, 'user_id' => null]);
         $this->expectException(InvalidArgumentException::class);
@@ -131,12 +131,14 @@ final class GenerationTest extends TestCase
             'provider_status' => null,
             'estimated_cost_usd' => '0.072206250',
             'maximum_cost_usd' => '0.086275000',
+            'actual_cost_usd' => null,
+            'submission_message' => null,
             'image_url' => null,
             'image_url_expires_at' => null,
             'created_at' => $generation->created_at?->toIso8601String(),
         ], $history);
 
-        foreach (['provider_id', 'provider_key_fingerprint', 'submission_token', 'quote_snapshot', 'usage', 'provider_error', 'actual_cost_usd'] as $internalKey) {
+        foreach (['provider_id', 'provider_key_fingerprint', 'submission_token', 'quote_snapshot', 'usage', 'provider_error'] as $internalKey) {
             $this->assertArrayNotHasKey($internalKey, $history);
         }
 
@@ -378,11 +380,11 @@ final class GenerationTest extends TestCase
         $this->assertSame(ProviderGenerationStatus::Processing, $generation->provider_status);
     }
 
-    public function test_deleting_the_owner_retains_the_generation_without_an_owner(): void
+    public function test_operator_database_deletion_retains_the_generation_without_an_owner(): void
     {
         $generation = Generation::factory()->for($this->user)->create();
 
-        $this->user->delete();
+        DB::table('users')->where('id', $this->user->id)->delete();
         $generation->refresh();
 
         $this->assertNull($generation->user_id);
@@ -434,6 +436,7 @@ final class GenerationTest extends TestCase
             ['prompt' => null],
             ['prompt' => ''],
             ['prompt' => '   '],
+            ['prompt' => "bad\0prompt"],
             ['prompt' => str_repeat('😀', 4001)],
             ['reference_images' => 'https://example.com/reference.png'],
             ['reference_images' => $tooManyReferences],
@@ -522,11 +525,14 @@ final class GenerationTest extends TestCase
         $this->assertTrue(Schema::hasTable('generations'));
 
         $migration = require database_path('migrations/2026_11_17_033944_create_generations_table.php');
+        $financial = require database_path('migrations/2026_11_17_120000_create_generation_charges_and_outbox_tables.php');
 
+        $financial->down();
         $migration->down();
         $this->assertFalse(Schema::hasTable('generations'));
 
         $migration->up();
+        $financial->up();
         $this->assertTrue(Schema::hasTable('generations'));
     }
 

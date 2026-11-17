@@ -2,9 +2,13 @@
 
 namespace App\Providers;
 
+use App\Services\Mercure;
 use Carbon\CarbonImmutable;
+use Illuminate\Auth\Events\Logout;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 
@@ -24,6 +28,9 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+
+        // New live-update streams must not reuse a signed-out user's grant.
+        Event::listen(Logout::class, fn () => Cookie::queue(app(Mercure::class)->forgetCookie()));
     }
 
     /**

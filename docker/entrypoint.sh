@@ -6,4 +6,14 @@ if [ -z "${APP_KEY:-}" ]; then
     exit 1
 fi
 
+if [ "${QUEUE_CONNECTION:-database}" != "database" ]; then
+    echo "QUEUE_CONNECTION must be database for this supervised worker image." >&2
+    exit 1
+fi
+
+if [ -z "${MERCURE_PUBLISHER_JWT_KEY:-}" ] || [ -z "${MERCURE_SUBSCRIBER_JWT_KEY:-}" ]; then
+    echo "MERCURE_PUBLISHER_JWT_KEY and MERCURE_SUBSCRIBER_JWT_KEY are required. Generate each with: openssl rand -base64 32" >&2
+    exit 1
+fi
+
 exec "$@"

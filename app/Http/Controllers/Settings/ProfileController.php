@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Settings;
 
+use App\Exceptions\AccountHasGenerations;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\ProfileDeleteRequest;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
@@ -9,6 +10,7 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -52,7 +54,14 @@ class ProfileController extends Controller
 
         Auth::logout();
 
-        $user->delete();
+        try {
+            $user->delete();
+        } catch (AccountHasGenerations $exception) {
+            // A generation may have committed after request validation but before deletion.
+            Auth::login($user);
+
+            throw ValidationException::withMessages(['password' => $exception->getMessage()]);
+        }
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();

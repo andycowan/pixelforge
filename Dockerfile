@@ -2,7 +2,7 @@
 
 FROM dunglas/frankenphp:1-php8.4-bookworm AS php-base
 
-RUN install-php-extensions pdo_pgsql
+RUN install-php-extensions pdo_pgsql pcntl
 
 # Assets are built with PHP available because Wayfinder runs artisan during Vite builds.
 FROM php-base AS assets
@@ -36,7 +36,7 @@ RUN case "$(uname -m)" in \
 RUN npm ci --no-audit --no-fund \
     && npm run build \
     && npm run types:check \
-    && node --test tests/frontend/quote-preview.test.mjs
+    && node --test tests/frontend/*.test.mjs
 
 
 FROM php-base AS app
@@ -45,7 +45,10 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /app
 
-RUN echo 'memory_limit=512M' > /usr/local/etc/php/conf.d/zz-memory.ini
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends supervisor \
+    && rm -rf /var/lib/apt/lists/* \
+    && echo 'memory_limit=512M' > /usr/local/etc/php/conf.d/zz-memory.ini
 
 COPY --from=assets /app/vendor ./vendor
 COPY . .
@@ -56,12 +59,16 @@ RUN php artisan package:discover --ansi \
 
 COPY Caddyfile /etc/frankenphp/Caddyfile
 COPY docker/entrypoint.sh /usr/local/bin/app-entrypoint
-RUN chmod +x /usr/local/bin/app-entrypoint
+COPY docker/supervisord.conf /etc/supervisor/pixelforge.conf
+COPY docker/exit-on-fatal.py /usr/local/bin/exit-on-fatal.py
+COPY docker/healthcheck.sh /usr/local/bin/app-healthcheck
+RUN chmod +x /usr/local/bin/app-entrypoint /usr/local/bin/app-healthcheck \
+    && /usr/bin/python3 -m unittest discover -s tests/runtime
 
 EXPOSE 80
 
-HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 \
-    CMD curl -fsS http://127.0.0.1/up || exit 1
+HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
+    CMD app-healthcheck
 
 ENTRYPOINT ["app-entrypoint"]
-CMD ["frankenphp", "run", "--config", "/etc/frankenphp/Caddyfile", "--adapter", "caddyfile"]
+CMD ["supervisord", "-c", "/etc/supervisor/pixelforge.conf"]
