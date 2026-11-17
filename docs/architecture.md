@@ -227,6 +227,12 @@ The operator report aggregates immutable settlements by **provider completion da
 
 Use one provider API key/signing secret per environment.[4] Keep provider secrets, app key and Mercure credentials outside Git and image layers. Log correlation IDs and error codes without secrets or unnecessarily duplicating prompts/reference URLs. Public deployment requires a genuine public HTTPS webhook endpoint; local Fairlead DNS/Tailscale does not provide one by itself. For local callback testing, use an explicitly enabled Tailscale Funnel through the dedicated loopback Caddy gateway in `docker/webhook.Caddyfile`. Only POST /webhooks/pixelforge is forwarded, with verified Fairlead upstream TLS and sanitised error bodies; the rest of the development app remains private. This development tunnel requires tailnet approval and an awake/online Mac, and does not replace production deployment or reconciliation.
 
+### Build and publication
+
+GitHub Actions checks pull requests to `main`, main pushes and manual runs using the existing Dockerfile. Frontend formatting/lint, TypeScript/helper tests and Python supervision tests run during the build; Pint/PHPStan/PHPUnit run inside the built app image against a disposable Postgres 18 `pixelforge_test` database/role, with no application/provider secrets. The test configuration forces distinct fake Mercure signing keys rather than relying on a developer's runtime credentials. Existing test-isolation and real Postgres concurrency checks remain enabled.
+
+A separate job publishes successful main push/manual-main builds to GHCR with only contents-read and package-write permission; PR checks have no package-write authority. Images are linux/amd64 initially, tagged `latest` and `sha-<full commit SHA>` with repository/revision labels. Actions use pinned release SHAs, checkout does not retain credentials, and builds share a BuildKit cache. Publication runs are serialised; superseded PR runs are cancelled. Registry publication is not deployment: production secrets, migrations, backups and public runtime acceptance remain separate.
+
 ### Runtime target
 
 One app container contains compiled Vue assets, FrankenPHP/Caddy with Mercure, a Laravel queue worker and scheduler under a process supervisor. Handle termination/graceful shutdown, worker restarts on deployment and failures of supervised processes. HTTP health alone must not conceal dead background processing.

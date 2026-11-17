@@ -34,6 +34,7 @@ RUN case "$(uname -m)" in \
         | tar -xz -C /usr/local --strip-components=1
 
 RUN npm ci --no-audit --no-fund \
+    && npm run check \
     && npm run build \
     && npm run types:check \
     && node --test tests/frontend/*.test.mjs

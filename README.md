@@ -171,6 +171,17 @@ fl project rebuild app
 
 Then run migrations again only if migrations changed.
 
+## CI and container images
+
+[`.github/workflows/build.yml`](.github/workflows/build.yml) runs on pull requests to `main`, pushes to `main`, and manual dispatches:
+
+- **Test and build:** builds the application image with frontend formatting/lint, TypeScript, frontend helper tests and Python runtime tests; then runs Pint, PHPStan and the full PHP suite inside that image. CI supplies a disposable Postgres 18 service with only the `pixelforge_test` database/role, a generated test app key and fake Mercure signing keys. It uses no application database, provider credentials or local `.env`.
+- **Publish image:** only after successful checks on a `main` push or manual `main` run. Publishes `ghcr.io/andycowan/pixelforge:latest` and `ghcr.io/andycowan/pixelforge:sha-<full-commit-sha>`, with source/revision labels. Pull requests and manual runs on other branches never publish. Prefer the commit tag or image digest for deployments instead of the moving `latest` tag.
+
+Images initially target **linux/amd64**. GitHub Actions uses its automatic `GITHUB_TOKEN`; no additional repository secret is needed. The publish job requires package-write access allowed by repository/organisation policy. GHCR package visibility and deployment-host pull access must be configured separately if the image is private. See [GitHub's container publication guide](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images).
+
+Actions are pinned to release commit SHAs. BuildKit caches speed up subsequent builds; main publication runs are serialised, while superseded PR checks are cancelled. The pipeline publishes images only: deployment, migrations and production secrets remain explicit operations.
+
 ## Fairlead
 
 - `fl.yml` is the committed project definition. Generated env/Compose config stays in `~/.config/fl/projects/pixelforge/`.
@@ -193,5 +204,5 @@ The app image includes the Postgres PDO driver. No Dokploy database/service has 
 - Queue jobs time out after 30 seconds, below the database reservation timeout of 90 seconds. Container shutdown allows 70 seconds for ordered graceful process-group stopping. Health requires all supervised processes plus HTTP; exhausted startup failures terminate Supervisor so Docker can restart the container.
 - The scheduler runs `generations:recover` every minute. A manual sweep is `docker exec pixelforge-app-1 php artisan generations:recover`. Inspect paused requests/inbox outcomes and application/failed-job logs before resuming uncertain work; do not rewrite request keys or settled evidence.
 - Apply migrations explicitly before processing generation work after an upgrade; image builds/entrypoint never migrate automatically. Take a database backup first. Only additive migrations are introduced by the generation slice.
-- No SSR process or CI workflow is configured yet.
+- No SSR process is configured. GitHub Actions builds/tests the image and publishes successful `main` builds to GHCR; it does not deploy the app.
 - DNS resolves correctly to this Mac's Tailscale IP. If HTTPS reports an untrusted issuer, install Fairlead's existing mkcert CA into the system trust store: `CAROOT="$HOME/Library/Application Support/mkcert" mkcert -install`. This changes system trust and may require administrator approval. Explicit verification without changing trust: `curl --cacert "$HOME/Library/Application Support/mkcert/rootCA.pem" https://pixelforge.fl.wb/up`. With `XDG_DATA_HOME` set, plain `mkcert -install` may use a different CA directory.
