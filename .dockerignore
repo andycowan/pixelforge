@@ -1,5 +1,7 @@
 .git
 .github
+.playwright-cli
+bootstrap/cache/*.php
 .env
 .env.*
 !.env.example

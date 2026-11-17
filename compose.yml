@@ -1,21 +1,21 @@
 services:
-  app:
-    build:
-      context: .
-    image: pixelforge-app
-    env_file:
-      - .env
-    expose:
-      - "80"
-    volumes:
-      - storage:/app/storage
-      - type: bind
-        source: ./.env
-        target: /app/.env
-        read_only: true
-        bind:
-          create_host_path: false
-    restart: unless-stopped
+    app:
+        build:
+            context: .
+        image: pixelforge-app
+        env_file:
+            - .env
+        expose:
+            - '80'
+        volumes:
+            - storage:/app/storage
+            - type: bind
+              source: ./.env
+              target: /app/.env
+              read_only: true
+              bind:
+                  create_host_path: false
+        restart: unless-stopped
 
 volumes:
-  storage:
+    storage:

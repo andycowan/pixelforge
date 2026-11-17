@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
-import AppLogoIcon from '@/components/AppLogoIcon.vue';
+import { ref } from 'vue';
 import Heading from '@/components/Heading.vue';
-import { Card, CardContent } from '@/components/ui/card';
+import QuoteForm from '@/components/quote/QuoteForm.vue';
+import QuotePricePreview from '@/components/quote/QuotePricePreview.vue';
+import { useQuotePreview } from '@/composables/useQuotePreview';
 import { dashboard } from '@/routes';
+import type { QuoteFormInput } from '@/types/quote';
 
 defineOptions({
     layout: {
@@ -15,6 +18,16 @@ defineOptions({
         ],
     },
 });
+
+const input = ref<QuoteFormInput>({
+    prompt: '',
+    size: '1024x1024',
+    quality: 'medium',
+    referenceUrls: '',
+});
+
+const { quote, errors, serverFieldErrors, failure, status, retry } =
+    useQuotePreview(input);
 </script>
 
 <template>
@@ -22,24 +35,25 @@ defineOptions({
 
     <div class="flex h-full flex-1 flex-col gap-6 p-4">
         <Heading
+            class="mb-0!"
             title="Workspace"
-            description="Your Pixelforge generations will appear here."
+            description="Price an image generation against live provider rates. Image generation submission is not available yet."
         />
 
-        <Card class="w-full max-w-2xl">
-            <CardContent
-                class="flex flex-col items-center gap-3 py-12 text-center"
-            >
-                <AppLogoIcon
-                    class="size-8 fill-current text-muted-foreground"
-                />
-                <h2 class="text-lg font-semibold">No generations yet</h2>
-                <p class="max-w-sm text-sm text-muted-foreground">
-                    Image generation is not available yet. When it ships, your
-                    prompts, estimates, results and history will live in this
-                    workspace.
-                </p>
-            </CardContent>
-        </Card>
+        <div class="grid w-full items-start gap-6 xl:grid-cols-2">
+            <QuoteForm
+                v-model="input"
+                :errors="errors"
+                :server-field-errors="serverFieldErrors"
+            />
+
+            <QuotePricePreview
+                :status="status"
+                :quote="quote"
+                :failure="failure"
+                :input="input"
+                @retry="retry"
+            />
+        </div>
     </div>
 </template>

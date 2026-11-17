@@ -2,7 +2,7 @@
 
 Status: **accepted target architecture**. This records the decisions agreed during design; it is not a claim that the application already implements them.
 
-The existing app is the Laravel/Vue/Inertia authentication scaffold with a branded empty workspace, Postgres and a single FrankenPHP/Caddy app container behind Fairlead. Postgres supersedes the initial SQLite choice: it matches the employer's stack and supports the concurrent settlement workload without SQLite-specific write coordination. Mercure is present in the running image, but is not enabled. The state-owning provider lifecycle machine and generation-request persistence (model, schema, factory, owner scoping and safe history formatting) are implemented and tested. The model hydrates a fresh lifecycle machine but does not persist its mutations. Saloon, provider-result/settlement application, generation UI, background processes and live updates remain to be implemented.
+The existing app is the Laravel/Vue/Inertia authentication scaffold with a live quote-preview workspace, Postgres and a single FrankenPHP/Caddy app container behind Fairlead. Postgres supersedes the initial SQLite choice: it matches the employer's stack and supports the concurrent settlement workload without SQLite-specific write coordination. Mercure is present in the running image, but is not enabled. The state-owning provider lifecycle machine and generation-request persistence (model, schema, factory, owner scoping and safe history formatting) are implemented and tested. The model hydrates a fresh lifecycle machine but does not persist its mutations. Saloon's public pricing request, validated five-minute catalogue cache, exact quote/actual-cost calculator and authenticated quote endpoint are implemented. The Tailwind workspace previews estimated/maximum prices with token/rate detail; quotes are read-only and Generate stays disabled. A separate Generations sidebar item opens an authenticated placeholder page for future generation history. Provider submission, provider-result/settlement application, generated-image history, background processes and live updates remain to be implemented.
 
 ## 1. Intent and scope
 
@@ -14,15 +14,15 @@ Use one Laravel monolith. Do not introduce a separate frontend API, Vue Router, 
 
 ## 2. Layer ownership and coding rules
 
-| Layer | Owns | Does not own |
-| --- | --- | --- |
-| Controllers | HTTP input/output, invoking validation and authorisation, calling actions, responses and redirects | Business decisions, provider requests, queries, pricing, persistence rules or response-data shaping |
-| Form Requests and policies | Request validation and access decisions | Workflow orchestration |
-| Actions/services | Business logic, use-case orchestration, transaction boundaries and integration calls | Scattered query-builder updates or duplicate model rules |
-| Eloquent models | Queries/scopes, relationships, casts, persistence rules, valid mutations and returned-data formatting | HTTP responses, provider calls or event-stream publication |
-| Database | Unique constraints, foreign keys and integrity backing model rules | Application workflow |
-| Saloon integration | Provider HTTP contract, authentication, payloads, response parsing and transport failures | Local settlement, ownership or lifecycle decisions |
-| Vue/Inertia | Form interaction, page presentation and refreshing authoritative server props | Authoritative prices, financial arithmetic or lifecycle decisions |
+| Layer                      | Owns                                                                                                  | Does not own                                                                                        |
+| -------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Controllers                | HTTP input/output, invoking validation and authorisation, calling actions, responses and redirects    | Business decisions, provider requests, queries, pricing, persistence rules or response-data shaping |
+| Form Requests and policies | Request validation and access decisions                                                               | Workflow orchestration                                                                              |
+| Actions/services           | Business logic, use-case orchestration, transaction boundaries and integration calls                  | Scattered query-builder updates or duplicate model rules                                            |
+| Eloquent models            | Queries/scopes, relationships, casts, persistence rules, valid mutations and returned-data formatting | HTTP responses, provider calls or event-stream publication                                          |
+| Database                   | Unique constraints, foreign keys and integrity backing model rules                                    | Application workflow                                                                                |
+| Saloon integration         | Provider HTTP contract, authentication, payloads, response parsing and transport failures             | Local settlement, ownership or lifecycle decisions                                                  |
+| Vue/Inertia                | Form interaction, page presentation and refreshing authoritative server props                         | Authoritative prices, financial arithmetic or lifecycle decisions                                   |
 
 Controllers should read as **validated input → action → response**. Form Requests handle request validation; models still guard mutation invariants because jobs and webhooks do not pass through those requests.
 
@@ -112,12 +112,12 @@ The [provider machine](../app/StateMachines/ProviderGenerationStateMachine.php) 
 
 For example, a machine hydrated as queued can process, then complete; after `applyProcessing()` and `applySucceeded()`, its own `status()` is succeeded and `canComplete()` is false. Callers do not assign its next state themselves. [Pure unit tests](../tests/Unit/ProviderGenerationStateMachineTest.php) cover evolving state, guards and delivery sequences as well as the exhaustive observation matrix. Provider statuses remain string-backed enum values matching the API. Application methods retain diagnostic outcomes:
 
-| Outcome | Meaning | Caller responsibility |
-| --- | --- | --- |
-| `Advance` | First observation or valid forward movement; owned state updated | Validate payload before application and coordinate guarded persistence/settlement |
-| `Duplicate` | Same status observed again | Validate consistency and check idempotent settlement; do not assume the payload is harmless |
-| `Stale` | An earlier nonterminal status arrived late; owned state retained | Acknowledge/record the observation |
-| `Conflict` | Opposing terminal results; owned state retained | Surface the inconsistency without rewriting settled state |
+| Outcome     | Meaning                                                          | Caller responsibility                                                                       |
+| ----------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `Advance`   | First observation or valid forward movement; owned state updated | Validate payload before application and coordinate guarded persistence/settlement           |
+| `Duplicate` | Same status observed again                                       | Validate consistency and check idempotent settlement; do not assume the payload is harmless |
+| `Stale`     | An earlier nonterminal status arrived late; owned state retained | Acknowledge/record the observation                                                          |
+| `Conflict`  | Opposing terminal results; owned state retained                  | Surface the inconsistency without rewriting settled state                                   |
 
 Only `Advance` changes the owned in-memory status; duplicate/stale/conflicting observations leave it intact. Named application methods and guards share one internal rule source. The machine neither persists itself nor validates rates/usage, and does not throw for normal out-of-order delivery. Hydrate a fresh instance from the locked model inside each transaction attempt; do not register mutable singleton instances or reuse an in-memory state after rollback. Exhaustive transition-matrix tests cover every current/observed combination; new enum cases require explicit review of the rules and tests.
 
@@ -137,12 +137,12 @@ A webhook may arrive before the create response.[4] Correlate it to the existing
 
 Use Postgres in development, integration tests and production, with the Laravel database queue initially. Fairlead owns local Postgres; Dokploy will run a separate Postgres service in deployment. Add:
 
-| Table | Responsibility |
-| --- | --- |
-| `generations` | User ownership, immutable submitted options/key, submission bookkeeping, provider identity/status, estimates, pricing snapshots, usage, result/error, provider timestamps and local revision |
-| `webhook_events` | Unique provider event ID, verified payload, received timestamp, processing outcome and retry/operator diagnostics |
-| `generation_charges` | One immutable settlement per successful generation: provider cost, customer charge, markup/rounding policy and provider completion timestamp |
-| `outbox_messages` | Durable user-scoped notification intent, stable identity, payload/revision, publication attempts and completion marker |
+| Table                | Responsibility                                                                                                                                                                               |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `generations`        | User ownership, immutable submitted options/key, submission bookkeeping, provider identity/status, estimates, pricing snapshots, usage, result/error, provider timestamps and local revision |
+| `webhook_events`     | Unique provider event ID, verified payload, received timestamp, processing outcome and retry/operator diagnostics                                                                            |
+| `generation_charges` | One immutable settlement per successful generation: provider cost, customer charge, markup/rounding policy and provider completion timestamp                                                 |
+| `outbox_messages`    | Durable user-scoped notification intent, stable identity, payload/revision, publication attempts and completion marker                                                                       |
 
 ### First persistence slice
 
@@ -169,7 +169,9 @@ Use short Postgres transactions, generation-row locking for settlement, conditio
 - Parse decimal rate strings and calculate exactly; never convert through binary floats. Current provider costs are reported at nine decimal places.[4] A future rate that cannot be represented exactly at this scale must fail visibly rather than silently round provider cost.
 - Customer price is provider cost × `5/4`. Round half-up **once**, at final customer settlement, to one nanodollar. Record that policy; do not round each token component separately.
 - Preserve provider cost unchanged for reconciliation. Profit is customer charge minus provider cost, not a separately rounded calculation.
-- Fetch/cache pricing and token rules instead of hardcoding them. Estimates use estimated text tokens and midpoint reasoning tokens; an upper bound uses the published token maxima. Count Unicode characters, not bytes.
+- Fetch/cache pricing and token rules instead of hardcoding them. The implemented catalogue reader validates fresh and cached data, evicts malformed cache entries, uses a five-minute TTL and fails closed rather than serving expired rates on provider failure. Saloon's public pricing request needs no API key, has explicit connect/total timeouts and no hidden web-request retry sleeps.
+- Estimates ceil Unicode code-point count divided by published characters per token and round an odd reasoning midpoint up to a whole token. The upper bound ceils the text-variance bound and uses published reasoning maxima; output/reference counts use the selected options and include duplicate references. Reuse Brick Math for exact arithmetic, require whole-nanodollar provider totals after summing components, and reject overflow/noninteger money inputs rather than coercing them. `total_tokens` validates the component sum, never adds another charge.
+- The authenticated/CSRF-protected quote endpoint is rate-limited and returns exact decimal strings with no-store caching. Vue debounces, aborts and versions previews, clears old prices synchronously on input changes and never computes monetary prices. The preview's labels, explanatory copy and permanently visible token/rate breakdown stay mounted during recalculation; only numeric values become loading placeholders. Estimate and maximum explanations are available through labelled info-button tooltips supporting hover, keyboard focus and touch. A quote neither persists a request nor starts work; submission will re-quote server-side.
 - Store the quote snapshot. Actual settlement uses the generation's provider rate snapshot, not current pricing. The displayed maximum is conditional on the quoted rates, not a guaranteed price cap if provider rates change before acceptance; disclose that distinction.
 - Models format exact decimal strings and user-facing breakdowns. Return money to JavaScript as strings. Display enough precision to avoid making small positive charges appear free; report totals from stored amounts, never summed display-rounded values.
 

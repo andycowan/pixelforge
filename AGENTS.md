@@ -35,6 +35,7 @@ Use Tailwind CSS for all application styling. Prefer existing Tailwind-styled UI
 ## Working constraints
 
 - Build a defensible, polished assessment product, not merely the minimum passing submission. Prefer purposeful depth over gratuitous abstractions.
+- Current priority: reach feature completeness before deeper refinements or redesign. Record issues for later rather than expanding the current slice; correctness, security, financial integrity and data-safety blockers must still be fixed before shipping.
 - Use Fairlead for local infrastructure/lifecycle. The app and isolated tests use separate Postgres databases and roles; tests must never use the application database.
 - Read the architecture for the accepted target and implementation status. Do not imply accepted but unimplemented features already work.
 - Keep changes scoped, test non-trivial logic and preserve existing data. Do not provision production resources or commit changes without the user's instruction.

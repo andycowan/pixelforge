@@ -6,7 +6,7 @@ The whole app runs in one container: FrankenPHP serves PHP and Caddy, and the Vu
 
 ## Architecture
 
-See [the agreed architecture](docs/architecture.md) for layer ownership, Saloon integration, lifecycle and accounting invariants, durable webhook processing, private SSE, reporting and implementation order. It describes the target design. The current app has authentication, a branded empty workspace, a tested provider lifecycle machine and generation-request persistence. Generation UI, provider submission and billing are not implemented yet.
+See [the agreed architecture](docs/architecture.md) for layer ownership, Saloon integration, lifecycle and accounting invariants, durable webhook processing, private SSE, reporting and implementation order. It describes the target design. The current app has authentication, generation-request persistence, a tested provider lifecycle machine and a live, server-calculated quote workspace. Provider submission, workers, settlement, generated-image history and live updates are not implemented yet.
 
 ## First run
 
@@ -27,6 +27,20 @@ Fairlead provisions the app database/role and keeps its generated `DATABASE_URL`
 Open <https://pixelforge.fl.wb>.
 
 The app key lives only in the ignored, host-owned `.env`. It is bind-mounted read-only at runtime and is never added to the image or repository.
+
+## Pricing preview
+
+Sign in to the workspace to price a prompt, size, quality and up to four reference-image URLs. Estimates and conditional maximum prices include a 25% markup. The token/rate breakdown makes the calculation inspectable; USD amounts remain exact decimal strings in the browser.
+
+The authenticated, CSRF-protected `POST /generations/quote` endpoint validates inputs and fetches the public Pixelforge pricing catalogue through Saloon. No provider API key is needed yet. Validated rates/rules are cached for five minutes; failures are not cached and expired prices are not silently reused when the provider is unavailable. The maximum is conditional on the quoted rates, not a guaranteed cap if rates change before provider acceptance.
+
+`PIXELFORGE_BASE_URL` defaults to `https://pixelforge.promptedit.dev/v1`. Restart the app after changing environment settings. If changing the provider URL, also discard the old catalogue:
+
+```bash
+docker exec pixelforge-app-1 php artisan cache:forget pixelforge.pricing.v1
+```
+
+**Preview only:** Generate remains disabled. A quote never creates a generation, enqueues work, reserves credit or charges anything. Actual-cost arithmetic is tested, but settlement is not connected yet.
 
 ## Migrations
 
@@ -61,7 +75,15 @@ docker exec pixelforge-app-1 ./vendor/bin/pint --test
 docker exec pixelforge-app-1 ./vendor/bin/phpstan analyse
 ```
 
-Frontend dependency installation, build, and type checking run inside Docker during the image build; no host PHP or Node installation is needed.
+Frontend dependency installation, build, type checking and the pure quote-helper tests run inside Docker during the image build; no host PHP or Node installation is needed. To run frontend formatting/lint and helper checks separately:
+
+```bash
+docker build --target assets -t pixelforge-assets .
+docker run --rm --entrypoint npm pixelforge-assets run check
+docker run --rm --entrypoint node pixelforge-assets --test tests/frontend/quote-preview.test.mjs
+```
+
+With Node 26 locally, the last test command can also be run directly.
 
 There is no HMR/dev server or SSR. After changing Vue, CSS, or TypeScript, rebuild:
 

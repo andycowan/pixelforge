@@ -35,7 +35,8 @@ RUN case "$(uname -m)" in \
 
 RUN npm ci --no-audit --no-fund \
     && npm run build \
-    && npm run types:check
+    && npm run types:check \
+    && node --test tests/frontend/quote-preview.test.mjs
 
 
 FROM php-base AS app
