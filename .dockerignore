@@ -17,3 +17,4 @@ storage/framework/sessions/*
 storage/framework/views/*
 compose.local.yml
 docs/decisions.md
+BRIEF.md

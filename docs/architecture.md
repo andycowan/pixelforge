@@ -2,15 +2,15 @@
 
 Status: **accepted target architecture**. This records the decisions agreed during design; it is not a claim that the application already implements them.
 
-The existing app is the Laravel/Vue/Inertia authentication scaffold with a live quote-preview workspace, Postgres and a single FrankenPHP/Caddy app container behind Fairlead. Postgres supersedes the initial SQLite choice: it matches the employer's stack and supports the concurrent settlement workload without SQLite-specific write coordination. The state-owning provider lifecycle machine and generation-request persistence (model, schema, factory, owner scoping and safe history formatting) are implemented and tested. The model hydrates a fresh lifecycle machine but does not persist its mutations. Saloon's public pricing request, validated five-minute catalogue cache, exact quote/actual-cost calculator and authenticated quote endpoint are implemented. The Tailwind workspace previews estimated/maximum prices with token/rate detail; quotes are read-only and Generate is enabled when provider credentials are configured. A separate Generations sidebar item opens authenticated, owner-scoped results/history. Provider submission/retrieval, durable verified webhook inbox, guarded provider-result application, immutable settlement/outbox intent and owned paginated results are now implemented and tested. Supervisor manages the web/queue/scheduler processes; recovery repairs missed dispatches. The bundled Mercure 1.x hub is enabled: an outbox publisher sends private per-user invalidations and the Generations page refreshes its props live (cookie-authorised EventSource, reconnect with refresh). Reporting/public deployment remain unfinished. Live provider verification requires environment-specific credentials and a publicly reachable webhook URL.
+The existing app is the Laravel/Vue/Inertia authentication scaffold with a live quote-preview workspace, Postgres and a single FrankenPHP/Caddy app container behind Fairlead. Postgres supersedes the initial SQLite choice: it matches the employer's stack and supports the concurrent settlement workload without SQLite-specific write coordination. The state-owning provider lifecycle machine and generation-request persistence (model, schema, factory, owner scoping and safe history formatting) are implemented and tested. The model hydrates a fresh lifecycle machine but does not persist its mutations. Saloon's public pricing request, validated five-minute catalogue cache, exact quote/actual-cost calculator and authenticated quote endpoint are implemented. The Tailwind workspace previews estimated/maximum prices with token/rate detail; quotes are read-only and Generate is enabled when provider credentials are configured. A separate Generations sidebar item opens authenticated, owner-scoped results/history. Provider submission/retrieval, durable verified webhook inbox, guarded provider-result application, immutable settlement/outbox intent and owned paginated results are now implemented and tested. Supervisor manages the web/queue/scheduler processes; recovery repairs missed dispatches. The bundled Mercure 1.x hub is enabled: an outbox publisher sends private per-user invalidations and the Generations page refreshes its props live (cookie-authorised EventSource, reconnect with refresh). An append-only credit ledger now holds each request's quoted maximum at submission, releases/debits it exactly once at settlement and backs a demo (no-payment) credit purchase; balances show in the sidebar, Credits page and workspace. Reporting/public deployment remain unfinished. Live provider verification requires environment-specific credentials and a publicly reachable webhook URL.
 
 ## 1. Intent and scope
 
 Build a small, production-minded image-generation product that demonstrates judgement, financial correctness, resilience and product quality—not merely the minimum assessment submission.
 
-The initial scope includes the required generation experience, exact billing, live history, verified webhooks, public deployment, an operator report and provider-cost reconciliation. Balances and fake credit purchases are deferred until that foundation is complete.
+The initial scope includes the required generation experience, exact billing, live history, verified webhooks, public deployment, an operator report and provider-cost reconciliation. Customer credit balances with a demo purchase flow were added once the settlement foundation existed (§6 Credit ledger).
 
-Use one Laravel monolith. Do not introduce a separate frontend API, Vue Router, a global frontend store, microservices, repositories, generic AI-provider interfaces, event sourcing or a general-purpose wallet ledger.
+Use one Laravel monolith. Do not introduce a separate frontend API, Vue Router, a global frontend store, microservices, repositories, generic AI-provider interfaces or event sourcing. The credit ledger is deliberately narrow: one customer currency, four entry types tied to purchases and generations, no transfers, refunds or general-purpose wallet.
 
 ## 2. Layer ownership and coding rules
 
@@ -137,12 +137,13 @@ A webhook may arrive before the create response.[4] Correlate it to the existing
 
 Use Postgres in development, integration tests and production, with the Laravel database queue initially. Fairlead owns local Postgres; Dokploy will run a separate Postgres service in deployment. Add:
 
-| Table                | Responsibility                                                                                                                                                                               |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `generations`        | User ownership, immutable submitted options/key, submission bookkeeping, provider identity/status, estimates, pricing snapshots, usage, result/error, provider timestamps and local revision |
-| `webhook_events`     | Unique provider event ID, verified payload, received timestamp, processing outcome and retry/operator diagnostics                                                                            |
-| `generation_charges` | One immutable settlement per successful generation: provider cost, customer charge, markup/rounding policy and provider completion timestamp                                                 |
-| `outbox_messages`    | Durable user-scoped notification intent, stable identity, payload/revision, publication attempts and completion marker                                                                       |
+| Table                   | Responsibility                                                                                                                                                                               |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `generations`           | User ownership, immutable submitted options/key, submission bookkeeping, provider identity/status, estimates, pricing snapshots, usage, result/error, provider timestamps and local revision |
+| `webhook_events`        | Unique provider event ID, verified payload, received timestamp, processing outcome and retry/operator diagnostics                                                                            |
+| `generation_charges`    | One immutable settlement per successful generation: provider cost, customer charge, markup/rounding policy and provider completion timestamp                                                 |
+| `outbox_messages`       | Durable user-scoped notification intent, stable identity, payload/revision, publication attempts and completion marker                                                                       |
+| `credit_ledger_entries` | Append-only customer credit: purchase, hold, release and debit entries in whole cents, each referencing its purchase idempotency key or generation                                           |
 
 ### First persistence slice
 
@@ -161,6 +162,9 @@ Required database-backed invariants:
 5. State, settlement and notification intent commit atomically. Mark inbox processing complete in that same transaction.
 6. Snapshotted request/pricing evidence and recorded financial entries cannot be silently rewritten. Account deletion must not cascade away provider-cost evidence; anonymise ownership if deletion is supported.
 
+7. Credit is never an edited number: available balance = purchases + releases − holds − debits, summed from immutable ledger rows. A generation has at most one hold, release and debit (unique generation/type); a purchase key is unique per user. Amounts are nonnegative whole cents; a database trigger rejects edits and deletes.
+8. A new generation, its credit hold and its queued submission commit together or not at all. Settlement's release/debit commit with the state change and charge.
+
 Use short Postgres transactions, generation-row locking for settlement, conditional mutations, unique constraints and foreign keys. Acquire locks in a consistent order and use bounded deadlock retries. Row locks coordinate concurrent work; unique constraints remain the final defence against duplicate effects.[6] No network operations or publication inside a database transaction.
 
 ### Money and estimates
@@ -174,6 +178,16 @@ Use short Postgres transactions, generation-row locking for settlement, conditio
 - The authenticated/CSRF-protected quote endpoint is rate-limited and returns exact decimal strings with no-store caching. Vue debounces, aborts and versions previews, clears old prices synchronously on input changes and never computes monetary prices. The preview's labels, explanatory copy and permanently visible token/rate breakdown stay mounted during recalculation; only numeric values become loading placeholders. Estimate and maximum explanations are available through labelled info-button tooltips supporting hover, keyboard focus and touch. A quote neither persists a request nor starts work; submission will re-quote server-side.
 - Store the quote snapshot. Actual settlement uses the generation's provider rate snapshot, not current pricing. The displayed maximum is conditional on the quoted rates, not a guaranteed price cap if provider rates change before acceptance; disclose that distinction.
 - Models format exact decimal strings and user-facing breakdowns. Return money to JavaScript as strings. Display enough precision to avoid making small positive charges appear free; report totals from stored amounts, never summed display-rounded values.
+
+### Credit ledger
+
+- **Affordability.** `RequestGeneration` locks the owner row, inserts the generation and calls `CreditLedgerEntry::holdFor()`, which re-locks the owner (a no-op), sums available credit and throws if it is below the quoted maximum. The transaction then rolls back: nothing is created, held or queued, and the HTTP layer returns a 422 `credits` error. Concurrent submissions serialise on the owner lock, so the second one sees the first's hold. A retried submission token is answered from its existing row before any credit check. The quote endpoint reports an advisory `affordable` flag; the Vue page disables Generate with it, but the server enforces regardless.
+- **Settlement.** Inside `ApplyProviderGeneration`'s transaction, a succeeded generation gets its immutable charge, then `CreditLedgerEntry::settle()` releases the **whole** hold and debits exactly `customer_cost_nanodollars`. A failed generation releases the hold. A definitive submission rejection releases it inside `SubmitGenerationJob`'s locked problem transaction. Uncertain or paused work keeps its hold. Every effect is keyed per generation and checked under the generation lock, so duplicate, late and reconciled observations are no-ops; an existing debit that disagrees with the charge raises an evidence conflict.
+- **Charge above hold.** When provider rates rise between quote and acceptance, the full actual charge is debited and the balance may go negative. New requests are then rejected until the user adds credit.
+- **Lock order.** Owner-first work (`RequestGeneration`, purchases, account deletion) takes `users FOR UPDATE` and never waits on an existing generation row. Settlement takes the generation row, then only the implicit `FOR KEY SHARE` owner lock from ledger foreign-key inserts; it never takes the owner lock itself. Deletion stops before touching generations when any generation or ledger row exists. There is therefore no lock cycle.
+- **Pre-ledger data.** Existing users start with no entries (zero balance). Generations settled before the ledger have no hold and receive no retroactive entries; a duplicate observation of one still writes nothing.
+- **Purchases.** A demo with no payment: fixed packages, an authenticated CSRF-protected POST rate-limited to 10 per minute, and a client UUID idempotency key. Reusing a key for a different package is a 422 conflict. The model caps any single purchase at $100 and accepts only positive whole cents.
+- **Retention.** Ledger rows are financial evidence. They block account deletion (D-047) and use `ON DELETE SET NULL` ownership for deliberate operator maintenance; the trigger permits only that ownership change.
 
 ## 7. Durable webhooks, jobs and recovery
 
@@ -234,7 +248,7 @@ Tests must cover the invariants rather than only the happy path:
 - Postgres concurrency and rollback tests using independent connections/processes, not just sequential tests. Tests use the dedicated `pixelforge_test` database and role via `TEST_DATABASE_URL`; bootstrap refuses the application database or cached application config before any destructive database reset. Do not substitute in-memory SQLite for Postgres integration tests.
 - Browser smoke coverage of the complete journey, plus a real streaming check through the deployed proxy.
 
-Build in vertical slices: (1) local form/history and model boundaries; (2) pricing and immutable submission; (3) Saloon submission and recovery; (4) webhook application/settlement; (5) private SSE/outbox; (6) reporting/reconciliation and public deployment. Run a deployment smoke check early rather than leaving hosting until the end. Balance functionality remains deferred.
+Build in vertical slices: (1) local form/history and model boundaries; (2) pricing and immutable submission; (3) Saloon submission and recovery; (4) webhook application/settlement; (5) private SSE/outbox; (6) reporting/reconciliation and public deployment. Run a deployment smoke check early rather than leaving hosting until the end. Credit balances were added after slice 5, ahead of reporting.
 
 ## Sources
 

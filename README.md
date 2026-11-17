@@ -6,7 +6,7 @@ The whole app runs in one container: FrankenPHP serves PHP and Caddy, and the Vu
 
 ## Architecture
 
-See [the agreed architecture](docs/architecture.md) for layer ownership, Saloon integration, lifecycle and accounting invariants, durable webhook processing, private SSE, reporting and implementation order. It describes the target design. The app now has authentication, exact quote calculations, durable generation submission/reconciliation, verified webhook receipt, monotonic lifecycle application, exactly-once settlement and owned generation history. Supervisor runs the web server, queue worker and scheduler in the same container. The Generations page updates live over a private Mercure event stream. Operator reporting/reconciliation and public deployment remain unfinished.
+See [the agreed architecture](docs/architecture.md) for layer ownership, Saloon integration, lifecycle and accounting invariants, durable webhook processing, private SSE, reporting and implementation order. It describes the target design. The app now has authentication, exact quote calculations, durable generation submission/reconciliation, verified webhook receipt, monotonic lifecycle application, exactly-once settlement, owned generation history and an append-only customer credit ledger with demo top-ups. Supervisor runs the web server, queue worker and scheduler in the same container. The Generations page updates live over a private Mercure event stream. Operator reporting/reconciliation and public deployment remain unfinished.
 
 ## First run
 
@@ -43,7 +43,17 @@ The authenticated, CSRF-protected `POST /generations/quote` endpoint validates i
 docker exec pixelforge-app-1 php artisan cache:forget pixelforge.pricing.v1
 ```
 
-A quote never creates a generation, enqueues work, reserves credit or charges anything. Generate is enabled only when a provider API key is configured; submission re-quotes server-side and records the immutable request before background work starts.
+A quote never creates a generation, enqueues work, reserves credit or charges anything; it only reports whether the current available balance covers the maximum. Generate is enabled only when a provider API key is configured and the balance covers the quoted maximum; submission re-quotes server-side, re-checks credit and records the immutable request and its credit hold before background work starts.
+
+## Credits
+
+Each user has a credit balance derived from an append-only ledger (`credit_ledger_entries`): purchases and releases add credit, holds and debits remove it. The balance appears in the sidebar **Credits** item, on the Credits page and next to Generate.
+
+- **Buy credits** (`/credits`) is a demo: fixed $5/$10/$25 packages, no payment taken. Each purchase carries a client UUID, so a double-click or retry credits once. Purchases are rate-limited to 10 per minute per user.
+- Submitting a generation holds its quoted **maximum** price. If the available balance is lower, the request is rejected with a 422 and nothing is created, held or queued.
+- On success the whole hold is released and the actual charge (the same amount as `generation_charges.customer_cost_nanodollars`) is debited. Provider failure or definitive rejection releases the hold. Uncertain or paused submissions keep their hold until the outcome is known.
+- If provider rates rise between quote and acceptance, the full actual charge is still debited and the balance can go negative; new generations are then blocked until credit is added.
+- Existing users start at $0.00. Generations settled before the ledger existed have no hold and receive no retroactive debit. Ledger entries are retained financial evidence: the database rejects edits and deletes, and accounts with entries cannot be deleted.
 
 ## Generation configuration
 
@@ -62,7 +72,7 @@ The inbox verifies raw-body signatures before JSON decoding, enforces a five-min
 
 Initial limits: five submission network attempts, a conservative shared 45/minute job budget, 60-second work leases, roughly 15-second accepted-generation retrieval and a 30-minute automatic recovery window. Provider `Retry-After` is respected. The recovery sweep considers at most 20 items per minute. Exhaustion/configuration problems pause work for operator attention without fabricating provider failure.
 
-Images retain the provider's fixed 24-hour expiry. Accounts with generation evidence cannot currently be deleted through the app; explicit anonymisation/retention remains to be implemented. Financial records are retained, never cascaded away.
+Images retain the provider's fixed 24-hour expiry. Accounts with generation or credit evidence cannot currently be deleted through the app; explicit anonymisation/retention remains to be implemented. Financial records are retained, never cascaded away.
 
 ## Local webhooks through Tailscale Funnel
 
@@ -115,6 +125,8 @@ Migrations are deliberately never run by the container entrypoint or image build
 ```bash
 docker exec pixelforge-app-1 php artisan migrate --force
 ```
+
+The credit-ledger migration (`2026_11_17_160000_create_credit_ledger_entries_table`) is additive: it creates the ledger table, its constraints and an append-only trigger, and changes no existing rows. Everyone starts with a zero balance.
 
 Application data lives in Fairlead's Postgres database `pixelforge`, not the app container. App rebuilds and `fl project down` do not remove it. The `pixelforge_storage` volume still contains Laravel runtime files; the old SQLite file is retained there as an unused backup, not copied into Postgres.
 
