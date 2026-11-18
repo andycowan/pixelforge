@@ -8,6 +8,8 @@
 	@compressible not path /.well-known/mercure*
 	encode @compressible zstd gzip
 
+	header /up X-App-Revision {env.APP_REVISION}
+
 	mercure {
 		issuer {$APP_URL} {
 			publisher {

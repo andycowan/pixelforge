@@ -195,11 +195,12 @@ Then run migrations again only if migrations changed.
 [`.github/workflows/build.yml`](.github/workflows/build.yml) runs on pull requests to `main`, pushes to `main`, and manual dispatches:
 
 - **Test and build:** builds the application image with frontend formatting/lint, TypeScript, frontend helper tests and Python runtime tests; then runs Pint, PHPStan and the full PHP suite inside that image. CI supplies a disposable Postgres 18 service with only the `pixelforge_test` database/role, a generated test app key and fake Mercure signing keys. It uses no application database, provider credentials or local `.env`.
-- **Publish image:** only after successful checks on a `main` push or manual `main` run. Publishes `ghcr.io/andycowan/pixelforge:latest` and `ghcr.io/andycowan/pixelforge:sha-<full-commit-sha>`, with source/revision labels. Pull requests and manual runs on other branches never publish. Prefer the commit tag or image digest for deployments instead of the moving `latest` tag.
+- **Publish image:** only after successful checks on a `main` push or manual `main` run. Publishes `ghcr.io/andycowan/pixelforge:latest` and `ghcr.io/andycowan/pixelforge:sha-<full-commit-sha>`, with source/revision labels. Pull requests and manual runs on other branches never publish.
+- **Deploy to production:** after publishing, calls the Dokploy app's deploy webhook (GitHub `production` environment secret `DOKPLOY_DEPLOY_WEBHOOK_URL`, which can only redeploy this app). Dokploy redeploys `:latest`. The job then polls `https://px.bit-monkey.io/up` until its `X-App-Revision` header equals the pushed commit, and fails after 10 minutes; Dokploy's own "done" status is not proof the new task is running.
 
-Images initially target **linux/amd64**. GitHub Actions uses its automatic `GITHUB_TOKEN`; no additional repository secret is needed. The publish job requires package-write access allowed by repository/organisation policy. GHCR package visibility and deployment-host pull access must be configured separately if the image is private. See [GitHub's container publication guide](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images).
+Images initially target **linux/amd64**. Publishing uses the automatic `GITHUB_TOKEN`; deployment needs only the webhook secret above. The publish job requires package-write access allowed by repository/organisation policy. GHCR package visibility and deployment-host pull access must be configured separately if the image is private. See [GitHub's container publication guide](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images).
 
-Actions are pinned to release commit SHAs. BuildKit caches speed up subsequent builds; main publication runs are serialised, while superseded PR checks are cancelled. The pipeline publishes images only: deployment, migrations and production secrets remain explicit operations.
+Actions are pinned to release commit SHAs. BuildKit caches speed up subsequent builds; main publication and deployment runs are serialised, while superseded PR checks are cancelled. Production secrets stay in Dokploy; migrations run in the new container before it starts (see below).
 
 ## Fairlead
 
@@ -212,7 +213,7 @@ Actions are pinned to release commit SHAs. BuildKit caches speed up subsequent b
 
 ## Dokploy deployment
 
-The initial deployment runs the pinned GHCR image with a separate, private Postgres 18 service. See the [deployment runbook](docs/deployment.md) for the current URL, image settings, explicit migration steps and remaining production checks.
+Production runs `ghcr.io/andycowan/pixelforge:latest` at https://px.bit-monkey.io with a separate, private Postgres 18 service, and every successful `main` build deploys automatically. See the [deployment runbook](docs/deployment.md) for settings, rollback and remaining production checks.
 
 ## Operator report
 
@@ -232,6 +233,6 @@ docker exec pixelforge-app-1 php artisan users:admin you@example.com --revoke
 - Queue jobs time out after 30 seconds, below the database reservation timeout of 90 seconds. Container shutdown allows 70 seconds for ordered graceful process-group stopping. Health requires all supervised processes plus HTTP; exhausted startup failures terminate Supervisor so Docker can restart the container.
 - The scheduler runs `generations:recover` every minute. A manual sweep is `docker exec pixelforge-app-1 php artisan generations:recover`. Inspect paused requests/inbox outcomes and application/failed-job logs before resuming uncertain work; do not rewrite request keys or settled evidence.
 - Credit balances are append-only. To change one, record an operator adjustment that sets the user's available balance: `docker exec pixelforge-app-1 php artisan credits:adjust user@example.com --to=0.40 --reason="Why"`. It records one credit or debit adjustment with the reason (shown in the user's activity as "Adjustment"), or nothing if already at the target. A single adjustment is limited to $1,000.
-- Apply migrations explicitly before processing generation work after an upgrade; image builds/entrypoint never migrate automatically. Take a database backup first. Only additive migrations are introduced by the generation slice.
-- No SSR process is configured. GitHub Actions builds/tests the image and publishes successful `main` builds to GHCR; it does not deploy the app.
+- With `MIGRATE_ON_START=true` (set in production only) the entrypoint runs `php artisan migrate --force` before Supervisor starts; a failed migration stops the container rather than running new code on the old schema. Locally the flag is unset, so run migrations yourself after pulling. Keep migrations additive: during a start-first rollout the previous release briefly runs against the new schema.
+- No SSR process is configured. GitHub Actions builds/tests the image, publishes successful `main` builds to GHCR and deploys them to production.
 - DNS resolves correctly to this Mac's Tailscale IP. If HTTPS reports an untrusted issuer, install Fairlead's existing mkcert CA into the system trust store: `CAROOT="$HOME/Library/Application Support/mkcert" mkcert -install`. This changes system trust and may require administrator approval. Explicit verification without changing trust: `curl --cacert "$HOME/Library/Application Support/mkcert/rootCA.pem" https://pixelforge.fl.wb/up`. With `XDG_DATA_HOME` set, plain `mkcert -install` may use a different CA directory.

@@ -17,19 +17,19 @@ This is an **infrastructure-first deployment**, not full product acceptance. It 
 | Environment           | `nO5EfwUJOF6uSbsCrBg19`                                                                                                                                                            |
 | Application           | `tgu1YlcKPzwZFLXXJMbg-` (`pixelforge-app-iu9qbn`)                                                                                                                                  |
 | Source                | Docker, not a Git build                                                                                                                                                            |
-| Image                 | `ghcr.io/andycowan/pixelforge@sha256:7924f6b25b6c461c53b51744cbf71fef3feacbf7551d16dcd953e844fe5a7fdd`                                                                             |
+| Image                 | `ghcr.io/andycowan/pixelforge:latest` (registry credentials are app-specific)                                                                                                      |
 | Platform / replicas   | `linux/amd64` / one                                                                                                                                                                |
 | Internal HTTP port    | `80`                                                                                                                                                                               |
 | Domains               | `px.bit-monkey.io` (primary) and the temporary `sslip.io` hostname; both HTTPS / Let's Encrypt to port 80                                                                          |
 | DNS                   | Cloudflare zone `bit-monkey.io`: proxied CNAME `px` → `levante.bit-monkey.io` (record `ff130cc7b27ca320f7b71a18008807cb`). Created via the Cloudflare API, not managed by OpenTofu |
-| `APP_URL`             | Still the temporary `sslip.io` URL; see below                                                                                                                                      |
-| Command               | Image default: Supervisor manages web, worker and scheduler                                                                                                                        |
+| `APP_URL`             | `https://px.bit-monkey.io`                                                                                                                                                         |
+| Command               | Image default: entrypoint migrates (`MIGRATE_ON_START=true`), then Supervisor manages web, worker and scheduler                                                                    |
 | Stop grace period     | 70 seconds (`70000000000` nanoseconds in Swarm settings)                                                                                                                           |
 | App storage           | Named volume `pixelforge-app-iu9qbn-storage` at `/app/storage`                                                                                                                     |
 | Database              | Dokploy Postgres `f8po30xQyp7WTalVHVx5n` (`pixelforge-db-bb1mag`), Postgres 18                                                                                                     |
 | Database connectivity | Private `dokploy-network`; no public database port                                                                                                                                 |
 | Database storage      | Named volume `pixelforge-db-bb1mag-data` contains the actual PostgreSQL data directory                                                                                             |
-| Deployment trigger    | Manual; CI publishes images but does not deploy them                                                                                                                               |
+| Deployment trigger    | Automatic: CI calls the deploy webhook after each successful `main` build; `autoDeploy` on                                                                                         |
 
 ### Configuration and credentials
 
@@ -45,7 +45,7 @@ Runtime configuration lives in Dokploy's application environment:
 
 Local operator credentials and the initial production environment snapshot are under Git-/Docker-ignored `.private/`, with owner-only permissions. Never commit them. The initial snapshot is not automatically kept in sync with later Dokploy UI edits.
 
-**Important current configuration distinction:** the running container has image generation disabled and `MAIL_MAILER=log`. Two provider credentials were subsequently added to Dokploy, but they match the local environment's credentials and have **not** been applied to the running service. They were preserved, not overwritten. Replace them with a separate production API key/signing secret before clicking Deploy/Redeploy; otherwise callbacks and per-key usage would mix environments. Configure actual mail delivery before relying on registration verification or password resets.
+**Provider credentials:** the Dokploy environment uses the same Pixelforge API key and signing secret as local development. Andrew chose to keep them because this deployment is a test (D-071), so automatic deploys activate them. Consequences: provider usage and the operator report's reconciliation mix local and production generations for that key, and signed callbacks go wherever the provider's webhook is registered (currently the local tunnel), so production relies on reconciliation polling for results. Use a separate production key/secret before real use. `MAIL_MAILER=log`. Configure actual mail delivery before relying on registration verification or password resets.
 
 ### Custom domain and Cloudflare
 
@@ -53,7 +53,7 @@ Local operator credentials and the initial production environment snapshot are u
 
 Create the DNS record before adding the Dokploy domain, so certificate issuance can succeed immediately. Adding an application domain writes only that app's Traefik route; it does not redeploy the app.
 
-The app builds page URLs from the request host, so it works on `px.bit-monkey.io` while `APP_URL` still names the temporary host. Mercure tokens and the hub both derive from `APP_URL`, so they remain consistent. Switch `APP_URL` to `https://px.bit-monkey.io` when the app is next redeployed, so out-of-request URLs (queued mail and similar) and the provider webhook URL use the permanent host. Don't redeploy until the saved provider credentials are replaced with production-only values. Remove the `sslip.io` domain only after that switch is verified.
+`APP_URL` is `https://px.bit-monkey.io`, so out-of-request URLs and Mercure tokens use the permanent host. Remove the `sslip.io` domain once it is no longer needed.
 
 Because of the Cloudflare proxy, and because Levante's Traefik does not trust Cloudflare's forwarding headers, the app sees Cloudflare edge IPs rather than real client IPs. Login throttling keys on email plus that IP, and generation throttles key on the user, so this is acceptable for now. Revisit it before relying on per-IP limits.
 
@@ -79,11 +79,22 @@ Use a verified, current production environment snapshot for that command. `--pul
 
 The first deployment exposed the empty-schema ordering issue above; a one-off migration corrected it, and the existing Swarm service recovered without another deployment request. No permanent migration-at-startup behavior was added.
 
-## Updating the image
+## Automatic deployment
 
-Wait for the desired commit's **Build** workflow to pass. In the app's Docker source settings, select its tested commit tag or, preferably, its verified digest. Keep existing registry credentials, environment, domain, storage and one-replica settings unless deliberately changing them. Back up the database, apply the new image's pending migrations explicitly, deploy, then verify the actual running digest and public endpoints. A green build or Dokploy deployment record alone does not prove the app or worker is healthy.
+Every successful `main` build deploys itself (D-071):
 
-Do not deploy `latest` blindly: it may differ from the last verified artifact. Do not run the broken parameterised CLI update commands against this server; CLI 0.30.5 detail requests returned HTTP 400. Supported REST endpoints worked on Dokploy 0.30.10. Prefer dedicated provider/environment operations; narrow direct updates must preserve unrelated fields and be read back.
+1. CI publishes `:latest` and `:sha-<commit>`, with the commit baked in as `APP_REVISION`.
+2. The **Deploy to production** job POSTs the app's Dokploy deploy webhook (`DOKPLOY_DEPLOY_WEBHOOK_URL` in the GitHub `production` environment). The app has `autoDeploy` on and its Docker image set to `ghcr.io/andycowan/pixelforge:latest`.
+3. Swarm starts the new task first (Dokploy's default start-first update with rollback on failure). Its entrypoint runs `php artisan migrate --force` because `MIGRATE_ON_START=true`, then starts Supervisor. A failed migration or health check leaves the previous task serving.
+4. CI polls `https://px.bit-monkey.io/up` until the `X-App-Revision` header equals the pushed commit; after 10 minutes it fails the run. Dokploy marks webhook deployments done even when the new task never converges, so trust this check rather than Dokploy's status.
+
+Migrations must be additive: during the start-first overlap the previous release runs against the migrated schema. A destructive change needs a deliberate, separately planned release.
+
+**Rollback:** in the app's Docker source settings set the image to a known-good `ghcr.io/andycowan/pixelforge:sha-<commit>` and deploy. The next push to `main` will not override it until the image is set back to `:latest`. Migrations are not rolled back automatically; restore from a backup if a schema change must be undone.
+
+**Backups:** scheduled Postgres backups are still not configured. A private manual dump was taken before the first automatic deployment (`.private/pre-autodeploy-20261118.dump`). Take another before any release with risky migrations.
+
+Do not run the broken parameterised CLI update commands against this server; CLI 0.30.5 detail requests returned HTTP 400. Supported REST endpoints worked on Dokploy 0.30.10. Prefer dedicated provider/environment operations; narrow direct updates must preserve unrelated fields and be read back.
 
 ## Verified on the initial deployment
 
@@ -100,10 +111,8 @@ Do not deploy `latest` blindly: it may differ from the last verified artifact. D
 
 ## Before full product use
 
-- Replace the unapplied shared provider credentials with a **production-only** Pixelforge API key and signing secret, and configure its webhook URL as this deployment's `/webhooks/pixelforge` endpoint. Verify a genuine signed callback after redeployment.
+- Replace the shared provider credentials with a **production-only** Pixelforge API key and signing secret, and configure its webhook URL as `https://px.bit-monkey.io/webhooks/pixelforge`. Verify a genuine signed callback after the next deploy.
 - Configure real mail delivery, then test registration, verification, sign-in and password reset.
-- Intentionally commit/publish the remaining local application features if they should be included; this deployment does not contain them.
 - Replace the broad registry PAT with a read-only pull credential.
 - Configure scheduled Postgres backups to an approved destination and prove a restore. The small private baseline dump taken before initial migration is not a backup schedule or restore proof.
 - Verify a real generation, exact settlement, live history and per-environment provider reconciliation; retain reviewer-accessible sample generations.
-- Switch `APP_URL` to `https://px.bit-monkey.io` at the next redeploy, configure the production provider webhook as `https://px.bit-monkey.io/webhooks/pixelforge`, verify, then remove the temporary `sslip.io` domain.

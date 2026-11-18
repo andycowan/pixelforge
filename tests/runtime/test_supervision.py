@@ -46,6 +46,30 @@ class SupervisionTest(unittest.TestCase):
             result = subprocess.run(['sh', str(ROOT / 'docker/entrypoint.sh'), 'true'], env=environment, capture_output=True)
             self.assertEqual(result.returncode, expected)
 
+    def test_entrypoint_migrates_before_starting_only_when_enabled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory, 'calls')
+            php = Path(directory, 'php')
+            php.write_text('#!/bin/sh\necho "php $*" >> "$TEST_LOG"\nexit "$TEST_PHP_EXIT"\n')
+            php.chmod(0o755)
+            base = dict(os.environ, PATH=directory + ':' + os.environ['PATH'], TEST_LOG=str(log),
+                        APP_KEY='test-key', QUEUE_CONNECTION='database',
+                        MERCURE_PUBLISHER_JWT_KEY='pub', MERCURE_SUBSCRIBER_JWT_KEY='sub')
+            command = ['sh', str(ROOT / 'docker/entrypoint.sh'), 'sh', '-c', 'echo started >> "$TEST_LOG"']
+
+            for flag, php_exit, expected_code, expected_calls in [
+                (None, '0', 0, ['started']),
+                ('true', '0', 0, ['php /app/artisan migrate --force --no-interaction', 'started']),
+                ('true', '1', 1, ['php /app/artisan migrate --force --no-interaction']),
+            ]:
+                log.write_text('')
+                environment = dict(base, TEST_PHP_EXIT=php_exit)
+                if flag is not None:
+                    environment['MIGRATE_ON_START'] = flag
+                result = subprocess.run(command, env=environment, capture_output=True)
+                self.assertEqual(result.returncode, expected_code)
+                self.assertEqual(log.read_text().splitlines(), expected_calls)
+
     def test_fatal_event_is_acknowledged_before_stopping_pid_one(self):
         calls = []
         childutils = types.SimpleNamespace(listener=types.SimpleNamespace(

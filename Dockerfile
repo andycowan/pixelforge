@@ -65,6 +65,9 @@ COPY docker/healthcheck.sh /usr/local/bin/app-healthcheck
 RUN chmod +x /usr/local/bin/app-entrypoint /usr/local/bin/app-healthcheck \
     && /usr/bin/python3 -m unittest discover -s tests/runtime
 
+ARG REVISION=
+ENV APP_REVISION=${REVISION}
+
 EXPOSE 80
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \

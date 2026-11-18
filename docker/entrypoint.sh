@@ -16,4 +16,8 @@ if [ -z "${MERCURE_PUBLISHER_JWT_KEY:-}" ] || [ -z "${MERCURE_SUBSCRIBER_JWT_KEY
     exit 1
 fi
 
+if [ "${MIGRATE_ON_START:-false}" = "true" ]; then
+    php /app/artisan migrate --force --no-interaction
+fi
+
 exec "$@"
