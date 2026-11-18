@@ -198,10 +198,22 @@ class Generation extends Model
     }
 
     /** @return LengthAwarePaginator<int, array<string, mixed>> */
-    public static function historyFor(User $user): LengthAwarePaginator
+    /**
+     * Owned history, optionally narrowed to prompts containing $search (case-insensitive, literal).
+     *
+     * @return LengthAwarePaginator<int, array<string, mixed>>
+     */
+    public static function historyFor(User $user, ?string $search = null): LengthAwarePaginator
     {
-        return self::query()->forUser($user)->with('charge')->latest()->orderByDesc('id')
-            ->paginate(20)->through(fn (Generation $generation): array => $generation->toHistoryArray());
+        return self::query()->forUser($user)
+            // shortcut: unindexed ILIKE scan of one user's prompts; add a pg_trgm GIN index if per-user history grows large.
+            ->when($search !== null && $search !== '', fn (Builder $query) => $query->whereRaw(
+                "prompt ILIKE ? ESCAPE '\\'",
+                ['%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], (string) $search).'%'],
+            ))
+            ->with('charge')->latest()->orderByDesc('id')
+            ->paginate(20)->withQueryString()
+            ->through(fn (Generation $generation): array => $generation->toHistoryArray());
     }
 
     /**
@@ -486,6 +498,14 @@ class Generation extends Model
             'image_url_expires_at' => $this->image_url_expires_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
+    }
+
+    /** A readable, filesystem-safe name such as "pixelforge-a-misty-harbour-x7k2pq.png". */
+    public function imageDownloadName(string $extension): string
+    {
+        $slug = Str::slug(Str::limit($this->prompt, 40, '', preserveWords: true)) ?: 'image';
+
+        return 'pixelforge-'.$slug.'-'.strtolower(substr($this->id, -6)).'.'.$extension;
     }
 
     /** @return array<string, mixed> */

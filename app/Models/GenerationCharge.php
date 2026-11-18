@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use App\Data\PixelforgePricing;
 use App\Enums\ProviderGenerationStatus;
 use App\Exceptions\ProviderEvidenceConflict;
 use App\Services\GenerationPricing;
+use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -111,6 +113,46 @@ final class GenerationCharge extends Model
     public function delete()
     {
         throw new LogicException('Generation charges are retained as immutable evidence.');
+    }
+
+    /**
+     * Settled totals per provider-completion UTC day and owner, for one API key
+     * (D-060). Pixelforge bills by the same completion day and key.
+     *
+     * @return list<array{date: string, user_id: int|null, generations: int, customer: int, provider: int, input_text_tokens: int, input_image_tokens: int, output_tokens: int, reasoning_tokens: int}>
+     */
+    public static function dailyTotalsByUser(CarbonImmutable $start, CarbonImmutable $end, string $keyFingerprint): array
+    {
+        $tokens = implode(', ', array_map(fn (string $type): string => "sum((g.usage->>'{$type}')::bigint) AS {$type}", PixelforgePricing::TOKEN_TYPES));
+
+        return array_values(self::query()->from('generation_charges AS c')->join('generations AS g', 'g.id', '=', 'c.generation_id')
+            ->where('g.provider_key_fingerprint', $keyFingerprint)
+            ->where('c.provider_completed_at', '>=', $start->startOfDay())
+            ->where('c.provider_completed_at', '<', $end->addDay()->startOfDay())
+            ->selectRaw("to_char(c.provider_completed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date, g.user_id, count(*) AS generations, sum(c.customer_cost_nanodollars) AS customer, sum(c.provider_cost_nanodollars) AS provider, {$tokens}")
+            ->groupBy('date', 'g.user_id')->orderBy('date')->orderBy('g.user_id')
+            ->toBase()->get()
+            ->map(fn (object $row): array => [
+                'date' => (string) $row->date,
+                'user_id' => $row->user_id === null ? null : (int) $row->user_id,
+                'generations' => (int) $row->generations,
+                'customer' => (int) $row->customer,
+                'provider' => (int) $row->provider,
+                'input_text_tokens' => (int) $row->input_text_tokens,
+                'input_image_tokens' => (int) $row->input_image_tokens,
+                'output_tokens' => (int) $row->output_tokens,
+                'reasoning_tokens' => (int) $row->reasoning_tokens,
+            ])->all());
+    }
+
+    /** Charges in the range made with a different API key: disclosed, never mixed into a key's figures. */
+    public static function otherKeyCountBetween(CarbonImmutable $start, CarbonImmutable $end, ?string $keyFingerprint): int
+    {
+        return self::query()->join('generations', 'generations.id', '=', 'generation_charges.generation_id')
+            ->where('generation_charges.provider_completed_at', '>=', $start->startOfDay())
+            ->where('generation_charges.provider_completed_at', '<', $end->addDay()->startOfDay())
+            ->when($keyFingerprint !== null, fn ($query) => $query->where('generations.provider_key_fingerprint', '!=', $keyFingerprint))
+            ->count();
     }
 
     public function customerCostUsd(): string

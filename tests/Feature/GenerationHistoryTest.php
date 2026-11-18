@@ -51,6 +51,55 @@ final class GenerationHistoryTest extends TestCase
             );
     }
 
+    public function test_search_matches_the_users_own_prompts_case_insensitively(): void
+    {
+        $user = User::factory()->create();
+        $other = User::factory()->create();
+        Generation::factory()->for($user)->create(['prompt' => 'A Lighthouse at dusk']);
+        Generation::factory()->for($user)->create(['prompt' => 'A red fox']);
+        Generation::factory()->for($other)->create(['prompt' => 'Another lighthouse']);
+
+        $this->actingAs($user)->get(route('generations.index', ['search' => 'lighthouse']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('search', 'lighthouse')
+                ->where('generations.total', 1)
+                ->where('generations.data.0.prompt', 'A Lighthouse at dusk'));
+    }
+
+    public function test_search_treats_wildcards_literally_and_blank_search_shows_everything(): void
+    {
+        $user = User::factory()->create();
+        foreach (['100% cotton shirt', 'snake_case sign', 'A back\\slash', 'Plain prompt'] as $prompt) {
+            Generation::factory()->for($user)->create(['prompt' => $prompt]);
+        }
+        $total = fn (?string $search): int => $this->actingAs($user)
+            ->get(route('generations.index', $search === null ? [] : ['search' => $search]))
+            ->viewData('page')['props']['generations']['total'];
+
+        $this->assertSame(1, $total('%'));
+        $this->assertSame(1, $total('_'));
+        $this->assertSame(1, $total('\\'));
+        $this->assertSame(1, $total('100%'));
+        $this->assertSame(0, $total('100%x'));
+        $this->assertSame(4, $total(''));
+        $this->assertSame(4, $total('   '));
+        $this->assertSame(4, $total(null));
+    }
+
+    public function test_search_is_kept_in_pagination_links_and_bounded(): void
+    {
+        $user = User::factory()->create();
+        Generation::factory()->count(21)->for($user)->create(['prompt' => 'Harbour scene']);
+
+        $next = $this->actingAs($user)->get(route('generations.index', ['search' => 'harbour']))
+            ->viewData('page')['props']['generations']['next_page_url'];
+        $this->assertStringContainsString('search=harbour', $next);
+
+        $this->actingAs($user)->get(route('generations.index', ['search' => str_repeat('a', 201)]))
+            ->assertSessionHasErrors('search');
+    }
+
     public function test_the_projection_is_paginated_newest_first(): void
     {
         $user = User::factory()->create();

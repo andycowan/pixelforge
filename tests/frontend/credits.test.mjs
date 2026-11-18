@@ -9,6 +9,8 @@ void test('credit activity labels distinguish reservations from actual charges',
         hold: { label: 'Hold', sign: '−' },
         release: { label: 'Hold released', sign: '+' },
         debit: { label: 'Generation', sign: '−' },
+        credit_adjustment: { label: 'Adjustment', sign: '+' },
+        debit_adjustment: { label: 'Adjustment', sign: '−' },
     });
 });
 

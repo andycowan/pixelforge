@@ -49,15 +49,10 @@ final readonly class GenerationQuote implements JsonSerializable
     public function toArray(): array
     {
         return [
+            // Customer prices only: provider costs, tokens, rates and markup stay server-side (in snapshot()).
             'currency' => 'usd',
-            'markup_percent' => 25,
             'estimated_cost_usd' => self::format($this->estimatedCostNanodollars),
             'maximum_cost_usd' => self::format($this->maximumCostNanodollars),
-            'provider_estimated_cost_usd' => self::format($this->estimatedProviderCostNanodollars),
-            'provider_maximum_cost_usd' => self::format($this->maximumProviderCostNanodollars),
-            'token_estimate' => $this->tokenEstimate,
-            'token_maximum' => $this->tokenMaximum,
-            'rates' => $this->pricing->rates,
         ];
     }
 

@@ -35,7 +35,6 @@ final class GenerationPricingTest extends TestCase
         // 412,562,500 and 467,343,750 marked-up nanodollars round up to whole cents.
         $this->assertSame(420_000_000, $quote->estimatedCostNanodollars);
         $this->assertSame(470_000_000, $quote->maximumCostNanodollars);
-        $this->assertSame('0.373875000', $quote->toArray()['provider_maximum_cost_usd']);
         $this->assertSame('0.470000000', $quote->toArray()['maximum_cost_usd']);
     }
 
@@ -85,7 +84,8 @@ final class GenerationPricingTest extends TestCase
         $this->assertSame('0.090000000', $quote->toArray()['maximum_cost_usd']);
         $this->assertSame(['ceiling', 2], [$quote->snapshot()['policy']['rounding'], $quote->snapshot()['policy']['precision']]);
         $this->assertSame('usd', $quote->toArray()['currency']);
-        $this->assertSame(25, $quote->toArray()['markup_percent']);
+        // The browser projection carries customer prices only; cost evidence stays in snapshot().
+        $this->assertSame(['currency', 'estimated_cost_usd', 'maximum_cost_usd'], array_keys($quote->toArray()));
         $this->assertSame($pricing->rates, $quote->snapshot()['rates']);
         $this->assertSame('5/4', $quote->snapshot()['policy']['markup']);
         $this->assertSame('0.15', $quote->snapshot()['token_rules']['text_token_variance']);

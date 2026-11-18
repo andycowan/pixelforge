@@ -216,8 +216,8 @@ function timestamp(value: string): string {
                         </span>
                         <span
                             class="min-w-0 truncate text-sm text-muted-foreground empty:hidden sm:flex-1 sm:empty:block"
-                            :title="entry.prompt_excerpt ?? undefined"
-                            >{{ entry.prompt_excerpt }}</span
+                            :title="entry.detail ?? undefined"
+                            >{{ entry.detail }}</span
                         >
                         <time
                             :datetime="entry.created_at"

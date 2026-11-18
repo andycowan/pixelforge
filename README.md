@@ -6,7 +6,7 @@ The whole app runs in one container: FrankenPHP serves PHP and Caddy, and the Vu
 
 ## Architecture
 
-See [the agreed architecture](docs/architecture.md) for layer ownership, Saloon integration, lifecycle and accounting invariants, durable webhook processing, private SSE, reporting and implementation order. It describes the target design. The app now has authentication, exact quote calculations, durable generation submission/reconciliation, verified webhook receipt, monotonic lifecycle application, exactly-once settlement, owned generation history and an append-only customer credit ledger with demo top-ups. Supervisor runs the web server, queue worker and scheduler in the same container. The Generations page updates live over a private Mercure event stream. Operator reporting/reconciliation and public deployment remain unfinished.
+See [the agreed architecture](docs/architecture.md) for layer ownership, Saloon integration, lifecycle and accounting invariants, durable webhook processing, private SSE, reporting and implementation order. It describes the target design. The app now has authentication, exact quote calculations, durable generation submission/reconciliation, verified webhook receipt, monotonic lifecycle application, exactly-once settlement, owned generation history and an append-only customer credit ledger with demo top-ups. Supervisor runs the web server, queue worker and scheduler in the same container. The Generations page updates live over a private Mercure event stream. Operators get a daily/per-user report reconciled against Pixelforge usage. The published image runs on Dokploy; production provider and email setup are still pending.
 
 ## First run
 
@@ -33,7 +33,7 @@ The app key lives only in the ignored, host-owned `.env`. It is bind-mounted rea
 
 ## Pricing preview
 
-Sign in to the workspace to price a prompt, size, quality and up to four reference-image URLs. Estimates, conditional maximum prices and actual charges include a 25% markup and are rounded up once to the next whole cent; provider costs stay exact. The token/rate breakdown makes the calculation inspectable; USD amounts remain exact decimal strings in the browser.
+Sign in to the workspace to price a prompt, size, quality and up to four reference-image URLs. Estimates, conditional maximum prices and actual charges include a 25% markup and are rounded up once to the next whole cent; provider costs stay exact. The workspace shows customers only the estimated and maximum prices; the quote response carries no provider costs, token counts, rates or markup (those stay in the stored quote snapshot). USD amounts remain exact decimal strings in the browser.
 
 The authenticated, CSRF-protected `POST /generations/quote` endpoint validates inputs and fetches the public Pixelforge pricing catalogue through Saloon. No provider API key is needed yet. Validated rates/rules are cached for five minutes; failures are not cached and expired prices are not silently reused when the provider is unavailable. The maximum is conditional on the quoted rates, not a guaranteed cap if rates change before provider acceptance.
 
@@ -191,11 +191,20 @@ Actions are pinned to release commit SHAs. BuildKit caches speed up subsequent b
 - `REDIS_URL` is present but unused: cache, sessions, and queues use the database.
 - Trusted proxies are limited to loopback and private Docker networks so HTTPS URLs and secure cookies work behind Fairlead's Traefik.
 
-## Dokploy deployment target
+## Dokploy deployment
 
-Deploy Postgres as a separate container/service alongside the app, with a persistent database volume, backups and a tested restore process. Use Postgres 18 to match Fairlead locally. Connect over Dokploy's private network using `DB_CONNECTION=pgsql` and `DATABASE_URL`; do not publish Postgres publicly or reuse local credentials. Set `APP_ENV=production` and `APP_DEBUG=false`, provide a stable `APP_KEY`, and run migrations explicitly. Do not provide local `TEST_DATABASE_URL` credentials to production.
+The initial deployment runs the pinned GHCR image with a separate, private Postgres 18 service. See the [deployment runbook](docs/deployment.md) for the current URL, image settings, explicit migration steps and remaining production checks.
 
-The app image includes the Postgres PDO driver. No Dokploy database/service has been provisioned yet.
+## Operator report
+
+Operators see **Operator report** in the sidebar (`/admin/report`): credit spend (customer charges), provider cost and profit for each UTC day and each user, with range totals and a per-user summary. Each day is compared with Pixelforge's `GET /v1/usage` for the configured API key: provider cost, generation count and every token category must match, and differences are shown rather than adjusted. Generations count on the UTC day they completed, as Pixelforge bills them, and only charges made with the current API key are included (others are counted separately). Ranges are inclusive UTC dates, up to 92 days, defaulting to the last 30.
+
+Grant or revoke operator access (it is not self-service or mass-assignable):
+
+```bash
+docker exec pixelforge-app-1 php artisan users:admin you@example.com
+docker exec pixelforge-app-1 php artisan users:admin you@example.com --revoke
+```
 
 ## Operational notes
 
@@ -203,6 +212,7 @@ The app image includes the Postgres PDO driver. No Dokploy database/service has 
 - Supervisor manages `web`, `worker`, `scheduler` and a fatal-process listener. Inspect them with `docker exec pixelforge-app-1 supervisorctl -c /etc/supervisor/pixelforge.conf status`.
 - Queue jobs time out after 30 seconds, below the database reservation timeout of 90 seconds. Container shutdown allows 70 seconds for ordered graceful process-group stopping. Health requires all supervised processes plus HTTP; exhausted startup failures terminate Supervisor so Docker can restart the container.
 - The scheduler runs `generations:recover` every minute. A manual sweep is `docker exec pixelforge-app-1 php artisan generations:recover`. Inspect paused requests/inbox outcomes and application/failed-job logs before resuming uncertain work; do not rewrite request keys or settled evidence.
+- Credit balances are append-only. To change one, record an operator adjustment that sets the user's available balance: `docker exec pixelforge-app-1 php artisan credits:adjust user@example.com --to=0.40 --reason="Why"`. It records one credit or debit adjustment with the reason (shown in the user's activity as "Adjustment"), or nothing if already at the target. A single adjustment is limited to $1,000.
 - Apply migrations explicitly before processing generation work after an upgrade; image builds/entrypoint never migrate automatically. Take a database backup first. Only additive migrations are introduced by the generation slice.
 - No SSR process is configured. GitHub Actions builds/tests the image and publishes successful `main` builds to GHCR; it does not deploy the app.
 - DNS resolves correctly to this Mac's Tailscale IP. If HTTPS reports an untrusted issuer, install Fairlead's existing mkcert CA into the system trust store: `CAROOT="$HOME/Library/Application Support/mkcert" mkcert -install`. This changes system trust and may require administrator approval. Explicit verification without changing trust: `curl --cacert "$HOME/Library/Application Support/mkcert/rootCA.pem" https://pixelforge.fl.wb/up`. With `XDG_DATA_HOME` set, plain `mkcert -install` may use a different CA directory.

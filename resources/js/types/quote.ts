@@ -31,28 +31,12 @@ export type QuoteRequest = {
     reference_images: string[];
 };
 
-export type QuoteRateCategory =
-    | 'input_text_tokens'
-    | 'input_image_tokens'
-    | 'output_tokens'
-    | 'reasoning_tokens';
-
-export type QuoteTokens = Record<QuoteRateCategory, number>;
-
-export type QuoteRates = Record<QuoteRateCategory, string>;
-
 /** Flat quote response; there is no `data` envelope. */
 export type QuotePreview = {
     affordable: boolean;
     currency: string;
-    markup_percent: number;
     estimated_cost_usd: string;
     maximum_cost_usd: string;
-    provider_estimated_cost_usd: string;
-    provider_maximum_cost_usd: string;
-    token_estimate: QuoteTokens;
-    token_maximum: QuoteTokens;
-    rates: QuoteRates;
 };
 
 export type QuoteFailureKind =

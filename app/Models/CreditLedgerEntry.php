@@ -30,12 +30,22 @@ use LogicException;
  * @property int $amount_nanodollars
  * @property string|null $generation_id
  * @property string|null $idempotency_key
+ * @property string|null $reason
  * @property CarbonInterface $created_at
  */
 final class CreditLedgerEntry extends Model
 {
     /** Largest single purchase the model accepts, whatever the HTTP packages say. */
     public const MAX_PURCHASE_NANODOLLARS = 100 * 1_000_000_000;
+
+    /** Signed contribution of a row to available credit (D-B01, D-B16). */
+    private const AVAILABLE_SQL = "CASE WHEN type IN ('purchase', 'release', 'credit_adjustment') THEN amount_nanodollars ELSE -amount_nanodollars END";
+
+    /** Signed contribution of a row to credit held for unfinished generations. */
+    private const HELD_SQL = "CASE type WHEN 'hold' THEN amount_nanodollars WHEN 'release' THEN -amount_nanodollars ELSE 0 END";
+
+    /** Largest single operator adjustment; a typo guard, not a business limit (D-B16). */
+    public const MAX_ADJUSTMENT_NANODOLLARS = 1_000 * 1_000_000_000;
 
     public $timestamps = false;
 
@@ -66,13 +76,27 @@ final class CreditLedgerEntry extends Model
     public static function availableFor(User $user): int
     {
         // shortcut: sums the user's whole ledger on every read; add a periodic balance snapshot if per-user entries grow into the hundreds of thousands.
-        return self::sumFor($user, "CASE WHEN type IN ('purchase', 'release') THEN amount_nanodollars ELSE -amount_nanodollars END");
+        return self::sumFor($user, self::AVAILABLE_SQL);
     }
 
     /** Credit reserved by generations whose outcome is not settled yet. */
     public static function heldFor(User $user): int
     {
-        return self::sumFor($user, "CASE type WHEN 'hold' THEN amount_nanodollars WHEN 'release' THEN -amount_nanodollars ELSE 0 END");
+        return self::sumFor($user, self::HELD_SQL);
+    }
+
+    /**
+     * Customer credit held across ALL users right now (the operator "bank"),
+     * with the same formulas as per-user balances so the two always agree.
+     * Includes ownerless rows: deleting a user does not spend their credit.
+     *
+     * @return array{available: int, held: int}
+     */
+    public static function bank(): array
+    {
+        $row = self::query()->selectRaw('COALESCE(SUM('.self::AVAILABLE_SQL.'), 0) AS available, COALESCE(SUM('.self::HELD_SQL.'), 0) AS held')->toBase()->first();
+
+        return ['available' => (int) ($row->available ?? 0), 'held' => (int) ($row->held ?? 0)];
     }
 
     /** @return array{available_usd: string, held_usd: string} */
@@ -106,6 +130,27 @@ final class CreditLedgerEntry extends Model
         $existing = self::query()->where('user_id', $user->getKey())->where('idempotency_key', $idempotencyKey)->first();
 
         return $existing ?? self::record($user->getKey(), CreditEntryType::Purchase, $nanodollars, idempotencyKey: $idempotencyKey);
+    }
+
+    /**
+     * Record an operator adjustment: positive adds credit, negative removes it
+     * (D-B16). The caller decides the amount, typically under the owner lock.
+     */
+    public static function adjust(User $user, int $signedNanodollars, string $reason): self
+    {
+        self::assertTransaction();
+        $amount = abs($signedNanodollars);
+        if ($amount === 0 || $amount > self::MAX_ADJUSTMENT_NANODOLLARS || $amount % GenerationPricing::CENT !== 0) {
+            throw new InvalidArgumentException('A credit adjustment must be a nonzero whole-cent amount within the adjustment limit.');
+        }
+        $reason = trim($reason);
+        if ($reason === '' || mb_strlen($reason) > 500) {
+            throw new InvalidArgumentException('A credit adjustment requires a reason of at most 500 characters.');
+        }
+        self::lockOwner($user->getKey());
+        $type = $signedNanodollars > 0 ? CreditEntryType::CreditAdjustment : CreditEntryType::DebitAdjustment;
+
+        return self::record($user->getKey(), $type, $amount, reason: $reason);
     }
 
     /**
@@ -195,8 +240,8 @@ final class CreditLedgerEntry extends Model
             'type' => $this->type->value,
             'amount_usd' => self::format($this->amount_nanodollars),
             'generation_id' => $this->generation_id,
-            // A short single-line prompt excerpt identifies the image; the full prompt stays on Generations.
-            'prompt_excerpt' => $this->generation === null ? null : Str::limit(Str::squish($this->generation->prompt), 60, '…'),
+            // Generation entries show a short single-line prompt excerpt (the full prompt stays on Generations); adjustments show their reason.
+            'detail' => $this->reason ?? ($this->generation === null ? null : Str::limit(Str::squish($this->generation->prompt), 60, '…')),
             'created_at' => $this->created_at->toIso8601String(),
         ];
     }
@@ -237,7 +282,7 @@ final class CreditLedgerEntry extends Model
         return ($nanodollars < 0 ? '-' : '').sprintf('$%d.%02d', intdiv($cents, 100), $cents % 100);
     }
 
-    private static function record(?int $userId, CreditEntryType $type, int $nanodollars, ?string $generationId = null, ?string $idempotencyKey = null): self
+    private static function record(?int $userId, CreditEntryType $type, int $nanodollars, ?string $generationId = null, ?string $idempotencyKey = null, ?string $reason = null): self
     {
         $entry = new self;
         $entry->appending = true;
@@ -247,6 +292,7 @@ final class CreditLedgerEntry extends Model
             $entry->amount_nanodollars = $nanodollars;
             $entry->generation_id = $generationId;
             $entry->idempotency_key = $idempotencyKey;
+            $entry->reason = $reason;
             $entry->created_at = now();
             if (! $entry->saveOrFail()) {
                 throw new LogicException('Credit ledger entry was not persisted.');

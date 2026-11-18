@@ -92,11 +92,7 @@ const generateHint = computed<string | null>(() => {
     <Head title="Workspace" />
 
     <div class="flex h-full flex-1 flex-col gap-6 p-4">
-        <Heading
-            class="mb-0!"
-            title="Workspace"
-            description="Describe an image and review its estimated price. Generating stores this request on the server, then submits it to the provider in the background."
-        />
+        <Heading class="mb-0!" title="Workspace" />
 
         <Alert v-if="!generation_enabled">
             <AlertTitle>Image generation is unavailable</AlertTitle>

@@ -1,13 +1,20 @@
 <script setup lang="ts">
+import { Download } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import { isResultImageExpired } from '@/lib/generation';
-import type { ProviderGenerationStatus } from '@/types/generation';
+import type {
+    GenerationSubmissionStatus,
+    ProviderGenerationStatus,
+} from '@/types/generation';
 
 const props = defineProps<{
     imageUrl: string | null;
     expiresAt: string | null;
     providerStatus: ProviderGenerationStatus | null;
+    submissionStatus: GenerationSubmissionStatus;
     alt: string;
+    /** Same-origin download route; the provider host can't be downloaded from directly. */
+    downloadUrl?: string;
 }>();
 
 // Expiry is evaluated against the stored timestamp only. We never request a
@@ -28,6 +35,13 @@ const placeholder = computed<{ title: string; detail: string }>(() => {
         return {
             title: 'Image could not be loaded',
             detail: 'The provider link may have expired or become unavailable. Refresh to check the current state.',
+        };
+    }
+
+    if (props.submissionStatus === 'rejected') {
+        return {
+            title: 'No image',
+            detail: 'The provider did not accept this request, so nothing was generated.',
         };
     }
 
@@ -54,10 +68,33 @@ const placeholder = computed<{ title: string; detail: string }>(() => {
 
 <template>
     <div
-        class="flex aspect-square w-full items-center justify-center overflow-hidden rounded-lg border bg-muted/40"
+        class="flex aspect-square w-full items-center justify-center overflow-hidden bg-muted/40"
     >
+        <a
+            v-if="imageUrl !== null && !expired && !loadFailed && downloadUrl"
+            :href="downloadUrl"
+            download
+            aria-label="Download image"
+            class="group relative block size-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
+        >
+            <img
+                :src="imageUrl"
+                :alt="alt"
+                loading="lazy"
+                decoding="async"
+                class="size-full object-contain"
+                @error="loadFailed = true"
+            />
+            <span
+                class="pointer-events-none absolute right-2 bottom-2 inline-flex items-center gap-1 rounded-md bg-background/90 px-2 py-1 text-xs font-medium opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+                aria-hidden="true"
+            >
+                <Download class="size-3.5" />
+                Download
+            </span>
+        </a>
         <img
-            v-if="imageUrl !== null && !expired && !loadFailed"
+            v-else-if="imageUrl !== null && !expired && !loadFailed"
             :src="imageUrl"
             :alt="alt"
             loading="lazy"
@@ -67,7 +104,7 @@ const placeholder = computed<{ title: string; detail: string }>(() => {
         />
         <div v-else class="flex flex-col gap-1 p-4 text-center">
             <p class="text-sm font-medium">{{ placeholder.title }}</p>
-            <p class="text-xs text-muted-foreground">
+            <p class="line-clamp-4 text-xs text-muted-foreground">
                 {{ placeholder.detail }}
             </p>
         </div>

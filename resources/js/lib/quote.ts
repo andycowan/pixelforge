@@ -5,7 +5,6 @@ import type {
     QuoteFormInput,
     QuotePreview,
     QuoteQualityOption,
-    QuoteRateCategory,
     QuoteRequest,
     QuoteSizeOption,
     QuoteValidation,
@@ -37,16 +36,6 @@ export const quoteQualityOptions: readonly QuoteQualityOption[] = [
         label: 'High',
         description: 'Most detailed output, highest output cost.',
     },
-];
-
-export const quoteTokenCategories: readonly {
-    key: QuoteRateCategory;
-    label: string;
-}[] = [
-    { key: 'input_text_tokens', label: 'Input text tokens' },
-    { key: 'input_image_tokens', label: 'Input image tokens' },
-    { key: 'output_tokens', label: 'Output tokens' },
-    { key: 'reasoning_tokens', label: 'Reasoning tokens' },
 ];
 
 const MONEY_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d+)?$/;
@@ -161,11 +150,6 @@ export function formatSignedUsd(value: string): string {
     return amount.startsWith('-') ? `-$${amount.slice(1)}` : `$${amount}`;
 }
 
-/** Token counts are not money; locale grouping is safe here. */
-export function formatTokenCount(value: number): string {
-    return value.toLocaleString('en-US');
-}
-
 /** Short, human label for the currency shown beside every amount. */
 export function formatCurrency(value: string): string {
     return value.trim().toUpperCase();
@@ -173,34 +157,6 @@ export function formatCurrency(value: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isTokenMap(value: unknown): boolean {
-    if (!isRecord(value)) {
-        return false;
-    }
-
-    return quoteTokenCategories.every(({ key }) => {
-        const count = value[key];
-
-        return (
-            typeof count === 'number' &&
-            Number.isSafeInteger(count) &&
-            count >= 0
-        );
-    });
-}
-
-function isRateMap(value: unknown): boolean {
-    if (!isRecord(value)) {
-        return false;
-    }
-
-    return quoteTokenCategories.every(({ key }) => {
-        const rate = value[key];
-
-        return typeof rate === 'string' && MONEY_PATTERN.test(rate);
-    });
 }
 
 /**
@@ -216,33 +172,12 @@ export function isQuotePreview(value: unknown): value is QuotePreview {
         return false;
     }
 
-    if (
-        typeof value.markup_percent !== 'number' ||
-        !Number.isFinite(value.markup_percent) ||
-        value.markup_percent < 0
-    ) {
-        return false;
-    }
+    return (['estimated_cost_usd', 'maximum_cost_usd'] as const).every(
+        (key) => {
+            const amount = value[key];
 
-    const moneyKeys = [
-        'estimated_cost_usd',
-        'maximum_cost_usd',
-        'provider_estimated_cost_usd',
-        'provider_maximum_cost_usd',
-    ] as const;
-
-    for (const key of moneyKeys) {
-        const amount = value[key];
-
-        if (typeof amount !== 'string' || !MONEY_PATTERN.test(amount)) {
-            return false;
-        }
-    }
-
-    return (
-        isTokenMap(value.token_estimate) &&
-        isTokenMap(value.token_maximum) &&
-        isRateMap(value.rates)
+            return typeof amount === 'string' && MONEY_PATTERN.test(amount);
+        },
     );
 }
 

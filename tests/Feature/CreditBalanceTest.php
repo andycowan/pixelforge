@@ -20,6 +20,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -388,8 +389,8 @@ final class CreditBalanceTest extends TestCase
             ->where('entries.0.generation_id', $inProgress->id)
             ->where('entries.1.type', 'debit')
             ->where('entries.1.generation_id', $succeeded->id)
-            ->where('entries.1.prompt_excerpt', 'A lighthouse')
-            ->where('entries.2.prompt_excerpt', null)
+            ->where('entries.1.detail', 'A lighthouse')
+            ->where('entries.2.detail', null)
             ->where('entries.2.type', 'purchase'));
     }
 
@@ -399,11 +400,99 @@ final class CreditBalanceTest extends TestCase
         $prompt = "A misty  harbour\nat dawn, ".str_repeat('with gulls ', 40);
         $this->requestGeneration($user, [...$this->generationPayload(), 'prompt' => $prompt])->assertRedirect(route('generations.index'));
 
-        $excerpt = $this->actingAs($user)->get(route('credits.index'))->viewData('page')['props']['entries'][0]['prompt_excerpt'];
+        $excerpt = $this->actingAs($user)->get(route('credits.index'))->viewData('page')['props']['entries'][0]['detail'];
         $this->assertStringStartsWith('A misty harbour at dawn, with gulls', $excerpt);
         $this->assertStringEndsWith('…', $excerpt);
         $this->assertLessThanOrEqual(61, mb_strlen($excerpt));
         $this->assertStringNotContainsString("\n", $excerpt);
+    }
+
+    public function test_operator_adjustments_set_the_available_balance_in_either_direction_once(): void
+    {
+        $user = $this->userWithCredit(2_670_000_000);
+
+        $this->artisan('credits:adjust', ['email' => $user->email, '--to' => '0.40', '--reason' => 'Testing a low balance'])
+            ->expectsOutput('Available balance $2.67 -> $0.40 (debit_adjustment $2.27).')->assertSuccessful();
+        // Repeating the same target records nothing, so a rerun can't adjust twice.
+        $this->artisan('credits:adjust', ['email' => $user->email, '--to' => '0.40', '--reason' => 'Testing a low balance'])
+            ->expectsOutput('Available balance is already $0.40; nothing recorded.')->assertSuccessful();
+        $this->artisan('credits:adjust', ['email' => $user->email, '--to' => '5', '--reason' => 'Goodwill credit'])
+            ->expectsOutput('Available balance $0.40 -> $5.00 (credit_adjustment $4.60).')->assertSuccessful();
+
+        $this->assertSame(5_000_000_000, CreditLedgerEntry::availableFor($user));
+        $this->assertSame(3, CreditLedgerEntry::query()->where('user_id', $user->id)->count());
+        $this->actingAs($user)->get(route('credits.index'))->assertInertia(fn (Assert $page) => $page
+            ->where('entries.0.type', 'credit_adjustment')
+            ->where('entries.0.amount_usd', '4.600000000')
+            ->where('entries.0.detail', 'Goodwill credit')
+            ->where('entries.1.type', 'debit_adjustment')
+            ->where('entries.1.amount_usd', '2.270000000')
+            ->where('entries.1.detail', 'Testing a low balance'));
+    }
+
+    /** @return array<string, array{array<string, string>}> */
+    public static function invalidAdjustments(): array
+    {
+        return [
+            'missing reason' => [['--to' => '0.40']],
+            'blank reason' => [['--to' => '0.40', '--reason' => '   ']],
+            'negative target' => [['--to' => '-1', '--reason' => 'x']],
+            'sub-cent target' => [['--to' => '0.405', '--reason' => 'x']],
+            'not a number' => [['--to' => 'lots', '--reason' => 'x']],
+            // From $10.00, a $1,011 target is a $1,001 change: over the $1,000 limit.
+            'above the adjustment limit' => [['--to' => '1011', '--reason' => 'x']],
+            'unknown user' => [['email' => 'nobody@example.invalid', '--to' => '0.40', '--reason' => 'x']],
+        ];
+    }
+
+    /** @param array<string, string> $options */
+    #[DataProvider('invalidAdjustments')]
+    public function test_invalid_adjustments_record_nothing(array $options): void
+    {
+        $user = $this->userWithCredit(1_000_000_000);
+
+        $this->artisan('credits:adjust', ['email' => $user->email, ...$options])->assertFailed();
+
+        $this->assertSame(1, CreditLedgerEntry::query()->where('user_id', $user->id)->count());
+        $this->assertSame(1_000_000_000, CreditLedgerEntry::availableFor($user));
+    }
+
+    public function test_the_database_requires_adjustments_to_carry_a_reason_and_no_generation(): void
+    {
+        $user = User::factory()->create();
+        $generation = Generation::factory()->for($user)->create();
+        $row = fn (array $overrides): array => array_replace(['user_id' => $user->id, 'type' => 'debit_adjustment', 'amount_nanodollars' => 10_000_000, 'generation_id' => null, 'idempotency_key' => null, 'reason' => 'Operator correction', 'created_at' => now()], $overrides);
+
+        $this->assertDatabaseRejects(fn () => DB::table('credit_ledger_entries')->insert($row(['reason' => null])), 'an adjustment without a reason');
+        $this->assertDatabaseRejects(fn () => DB::table('credit_ledger_entries')->insert($row(['reason' => '  '])), 'an adjustment with a blank reason');
+        $this->assertDatabaseRejects(fn () => DB::table('credit_ledger_entries')->insert($row(['generation_id' => $generation->id])), 'an adjustment tied to a generation');
+        $this->assertDatabaseRejects(fn () => DB::table('credit_ledger_entries')->insert($row(['amount_nanodollars' => 0])), 'a zero adjustment');
+        $this->assertDatabaseRejects(fn () => DB::table('credit_ledger_entries')->insert($row(['type' => 'purchase', 'idempotency_key' => (string) Str::uuid()])), 'a purchase with a reason');
+
+        DB::table('credit_ledger_entries')->insert($row([]));
+        $this->assertSame(-10_000_000, CreditLedgerEntry::availableFor($user));
+    }
+
+    public function test_the_adjustment_migration_refuses_to_roll_back_over_adjustments(): void
+    {
+        $user = $this->userWithCredit(1_000_000_000);
+        $migration = require database_path('migrations/2026_11_17_170000_add_credit_adjustments_to_ledger.php');
+        DB::transaction(fn () => CreditLedgerEntry::adjust($user, -10_000_000, 'Operator correction'));
+
+        $this->expectException(\RuntimeException::class);
+        $migration->down();
+    }
+
+    public function test_the_adjustment_migration_is_reversible_without_adjustments(): void
+    {
+        $this->userWithCredit(1_000_000_000);
+        $migration = require database_path('migrations/2026_11_17_170000_add_credit_adjustments_to_ledger.php');
+
+        $migration->down();
+        $this->assertFalse(Schema::hasColumn('credit_ledger_entries', 'reason'));
+        $migration->up();
+        $this->assertTrue(Schema::hasColumn('credit_ledger_entries', 'reason'));
+        $this->assertSame(1, CreditLedgerEntry::query()->count());
     }
 
     public function test_the_quote_reports_affordability_at_the_boundary_without_creating_anything(): void

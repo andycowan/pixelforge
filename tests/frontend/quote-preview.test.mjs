@@ -29,29 +29,8 @@ import {
 const QUOTE_RESPONSE = {
     affordable: true,
     currency: 'usd',
-    markup_percent: 25,
-    estimated_cost_usd: '0.072206250',
-    maximum_cost_usd: '0.086275000',
-    provider_estimated_cost_usd: '0.057765000',
-    provider_maximum_cost_usd: '0.069020000',
-    token_estimate: {
-        input_text_tokens: 3,
-        input_image_tokens: 0,
-        output_tokens: 1100,
-        reasoning_tokens: 1100,
-    },
-    token_maximum: {
-        input_text_tokens: 4,
-        input_image_tokens: 0,
-        output_tokens: 1100,
-        reasoning_tokens: 2000,
-    },
-    rates: {
-        input_text_tokens: '5.00',
-        input_image_tokens: '10.00',
-        output_tokens: '40.00',
-        reasoning_tokens: '12.50',
-    },
+    estimated_cost_usd: '0.080000000',
+    maximum_cost_usd: '0.090000000',
 };
 
 function formInput(overrides = {}) {
@@ -277,42 +256,19 @@ void test('accepts the flat contract and rejects envelopes or numeric money', ()
     assert.equal(isQuotePreview({ data: QUOTE_RESPONSE }), false);
     assert.equal(isQuotePreview(null), false);
     assert.equal(
-        isQuotePreview({ ...QUOTE_RESPONSE, estimated_cost_usd: 0.07220625 }),
+        isQuotePreview({ ...QUOTE_RESPONSE, estimated_cost_usd: 0.08 }),
         false,
     );
     assert.equal(isQuotePreview({ ...QUOTE_RESPONSE, currency: '' }), false);
     assert.equal(isQuotePreview({ ...QUOTE_RESPONSE, currency: 'eur' }), false);
     assert.equal(
-        isQuotePreview({
-            ...QUOTE_RESPONSE,
-            token_estimate: {
-                ...QUOTE_RESPONSE.token_estimate,
-                output_tokens: Number.MAX_SAFE_INTEGER + 1,
-            },
-        }),
+        isQuotePreview({ ...QUOTE_RESPONSE, maximum_cost_usd: undefined }),
         false,
     );
     assert.equal(
         isQuotePreview({
             ...QUOTE_RESPONSE,
-            rates: { ...QUOTE_RESPONSE.rates, output_tokens: 40 },
-        }),
-        false,
-    );
-    assert.equal(
-        isQuotePreview({
-            ...QUOTE_RESPONSE,
-            token_estimate: {
-                ...QUOTE_RESPONSE.token_estimate,
-                output_tokens: 1100.5,
-            },
-        }),
-        false,
-    );
-    assert.equal(
-        isQuotePreview({
-            ...QUOTE_RESPONSE,
-            maximum_cost_usd: '0.086275000\n',
+            maximum_cost_usd: '0.090000000\n',
         }),
         false,
     );

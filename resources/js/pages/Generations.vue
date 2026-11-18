@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
-import GenerationCard from '@/components/generations/GenerationCard.vue';
+import { Search, X } from '@lucide/vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
+import GenerationTile from '@/components/generations/GenerationTile.vue';
 import GenerationPagination from '@/components/generations/GenerationPagination.vue';
 import LiveStatus from '@/components/LiveStatus.vue';
 import { useGenerationStream } from '@/composables/useGenerationStream';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
     Card,
     CardContent,
@@ -27,6 +29,8 @@ defineOptions({
 const props = defineProps<{
     /** Owned, paginated history with the model's safe public projection. */
     generations: GenerationPaginator;
+    /** Current prompt search, as applied by the server. */
+    search: string | null;
     /** Same-origin hub path and this user's private topic. */
     live: { hub: string; topic: string };
 }>();
@@ -53,6 +57,36 @@ function refresh(): void {
 }
 
 const hasItems = computed(() => props.generations.data.length > 0);
+
+// Prompt search runs on the server so pagination and live reloads keep the filter.
+const query = ref(props.search ?? '');
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+
+function applySearch(): void {
+    const search = query.value.trim();
+
+    router.get(generationIndex().url, search === '' ? {} : { search }, {
+        only: ['generations', 'search'],
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
+}
+
+function onSearchInput(): void {
+    if (searchTimer !== null) clearTimeout(searchTimer);
+    searchTimer = setTimeout(applySearch, 300);
+}
+
+function clearSearch(): void {
+    query.value = '';
+    if (searchTimer !== null) clearTimeout(searchTimer);
+    applySearch();
+}
+
+onBeforeUnmount(() => {
+    if (searchTimer !== null) clearTimeout(searchTimer);
+});
 </script>
 
 <template>
@@ -89,12 +123,46 @@ const hasItems = computed(() => props.generations.data.length > 0);
                 live-label="Live: statuses update automatically"
             />
             <span
-                >Estimated and actual amounts are exact USD strings calculated
-                and settled by the server.</span
+                >Hover over or tap a caption for the full prompt, cost and
+                settings.</span
             >
         </p>
 
-        <Card v-if="!hasItems" class="w-full">
+        <div class="relative w-full sm:max-w-sm" role="search">
+            <Search
+                class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+            />
+            <Input
+                v-model="query"
+                type="search"
+                aria-label="Search prompts"
+                placeholder="Search prompts"
+                maxlength="200"
+                class="pr-9 pl-8 [&::-webkit-search-cancel-button]:hidden"
+                @input="onSearchInput"
+                @keydown.enter.prevent="applySearch"
+            />
+            <button
+                v-if="query !== ''"
+                type="button"
+                aria-label="Clear search"
+                class="absolute top-1/2 right-1.5 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                @click="clearSearch"
+            >
+                <X class="size-4" aria-hidden="true" />
+            </button>
+        </div>
+
+        <p
+            v-if="!hasItems && search"
+            class="text-sm text-muted-foreground"
+            role="status"
+        >
+            No generations match “{{ search }}”.
+        </p>
+
+        <Card v-else-if="!hasItems" class="w-full">
             <CardHeader>
                 <CardTitle>No generations yet</CardTitle>
                 <CardDescription>
@@ -110,13 +178,13 @@ const hasItems = computed(() => props.generations.data.length > 0);
         </Card>
 
         <template v-else>
-            <div class="flex flex-col gap-4">
-                <GenerationCard
-                    v-for="item in generations.data"
-                    :key="item.id"
-                    :item="item"
-                />
-            </div>
+            <ul
+                class="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4"
+            >
+                <li v-for="item in generations.data" :key="item.id">
+                    <GenerationTile :item="item" />
+                </li>
+            </ul>
 
             <GenerationPagination :paginator="generations" />
         </template>

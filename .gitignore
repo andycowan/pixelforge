@@ -27,8 +27,9 @@ npm-debug.log
 yarn-error.log
 /storage/database.sqlite*
 
-# Private interview preparation
+# Private interview preparation and local credentials
 /docs/decisions.md
+/.private/
 
 # Fairlead
 compose.local.yml

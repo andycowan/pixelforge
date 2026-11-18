@@ -61,30 +61,10 @@ final class GenerationQuoteTest extends TestCase
         $response = $this->quote()->assertOk();
 
         $response->assertExactJson([
+            // Customer prices only: no provider cost, tokens, rates or markup.
             'currency' => 'usd',
-            'markup_percent' => 25,
             'estimated_cost_usd' => '0.080000000',
             'maximum_cost_usd' => '0.090000000',
-            'provider_estimated_cost_usd' => '0.057765000',
-            'provider_maximum_cost_usd' => '0.069020000',
-            'token_estimate' => [
-                'input_text_tokens' => 3,
-                'input_image_tokens' => 0,
-                'output_tokens' => 1100,
-                'reasoning_tokens' => 1100,
-            ],
-            'token_maximum' => [
-                'input_text_tokens' => 4,
-                'input_image_tokens' => 0,
-                'output_tokens' => 1100,
-                'reasoning_tokens' => 2000,
-            ],
-            'rates' => [
-                'input_text_tokens' => '5.00',
-                'input_image_tokens' => '10.00',
-                'output_tokens' => '40.00',
-                'reasoning_tokens' => '12.50',
-            ],
             // A new user has no credit; CreditBalanceTest covers the true case.
             'affordable' => false,
         ]);
@@ -101,8 +81,7 @@ final class GenerationQuoteTest extends TestCase
 
         $response = $this->quote(['reference_images' => [$reference, $reference]])->assertOk();
 
-        $response->assertJsonPath('token_estimate.input_image_tokens', 1530);
-        $response->assertJsonPath('token_maximum.input_image_tokens', 1530);
+        // Two copies of the same reference raise the price over the no-reference $0.08/$0.09.
         $response->assertJsonPath('estimated_cost_usd', '0.100000000');
         $response->assertJsonPath('maximum_cost_usd', '0.110000000');
         $this->assertDatabaseCount('generations', 0);

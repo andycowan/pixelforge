@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { Coins, History, LayoutGrid } from '@lucide/vue';
+import { ChartColumn, Coins, History, LayoutGrid } from '@lucide/vue';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/sidebar';
 import { formatSignedUsd } from '@/lib/quote';
 import { dashboard } from '@/routes';
+import { report as adminReport } from '@/routes/admin';
 import { index as credits } from '@/routes/credits';
 import { index as generations } from '@/routes/generations';
 import type { NavItem } from '@/types';
@@ -40,6 +41,10 @@ const mainNavItems = computed<NavItem[]>(() => [
             ? formatSignedUsd(page.props.credits.available_usd)
             : undefined,
     },
+    // Operators only; the route itself is also gated server-side.
+    ...(page.props.auth.user?.is_admin
+        ? [{ title: 'Operator report', href: adminReport(), icon: ChartColumn }]
+        : []),
 ]);
 </script>
 

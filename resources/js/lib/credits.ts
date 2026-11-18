@@ -8,4 +8,6 @@ export const creditEntryPresentation: Record<
     hold: { label: 'Hold', sign: '−' },
     release: { label: 'Hold released', sign: '+' },
     debit: { label: 'Generation', sign: '−' },
+    credit_adjustment: { label: 'Adjustment', sign: '+' },
+    debit_adjustment: { label: 'Adjustment', sign: '−' },
 };

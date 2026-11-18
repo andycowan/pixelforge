@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { Coins, LayoutGrid, Menu } from '@lucide/vue';
+import { ChartColumn, Coins, LayoutGrid, Menu } from '@lucide/vue';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
@@ -30,6 +30,7 @@ import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { getInitials } from '@/composables/useInitials';
 import { formatSignedUsd } from '@/lib/quote';
 import { dashboard } from '@/routes';
+import { report as adminReport } from '@/routes/admin';
 import { index as credits } from '@/routes/credits';
 import type { BreadcrumbItem, NavItem } from '@/types';
 
@@ -62,6 +63,9 @@ const mainNavItems = computed<NavItem[]>(() => [
             ? formatSignedUsd(page.props.credits.available_usd)
             : undefined,
     },
+    ...(page.props.auth.user?.is_admin
+        ? [{ title: 'Operator report', href: adminReport(), icon: ChartColumn }]
+        : []),
 ]);
 </script>
 

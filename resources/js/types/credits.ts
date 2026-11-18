@@ -10,10 +10,16 @@ export type CreditPackage = {
 
 export type CreditEntry = {
     id: number;
-    type: 'purchase' | 'hold' | 'release' | 'debit';
+    type:
+        | 'purchase'
+        | 'hold'
+        | 'release'
+        | 'debit'
+        | 'credit_adjustment'
+        | 'debit_adjustment';
     amount_usd: string;
     generation_id: string | null;
-    /** Short single-line excerpt of the generation's prompt. */
-    prompt_excerpt: string | null;
+    /** Prompt excerpt for generation entries, or an adjustment's reason. */
+    detail: string | null;
     created_at: string;
 };

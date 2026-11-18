@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import PriceInfoTooltip from '@/components/quote/PriceInfoTooltip.vue';
-import QuoteBreakdown from '@/components/quote/QuoteBreakdown.vue';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -175,12 +174,10 @@ function retry(): void {
                                 Estimated price
                             </p>
                             <PriceInfoTooltip label="About the estimated price">
-                                Includes a 25% markup over the provider's cost,
-                                rounded up to the next cent. The estimate uses
-                                the provider's estimated text tokens and a
-                                midpoint reasoning-token count. The final charge
-                                follows actual token usage, so it may be higher
-                                or lower than this estimate.
+                                A typical price for these settings. You're
+                                charged for what the generation actually uses,
+                                so the final price may be a little higher or
+                                lower.
                             </PriceInfoTooltip>
                         </div>
                         <div
@@ -207,12 +204,10 @@ function retry(): void {
                                 Maximum price
                             </p>
                             <PriceInfoTooltip label="About the maximum price">
-                                Includes a 25% markup over the provider's cost,
-                                rounded up to the next cent. This is an upper
-                                bound at the quoted rates. If the provider
-                                changes its pricing before a generation is
-                                accepted, the bound changes too. It is not a
-                                guaranteed price cap.
+                                The most this generation can cost at today's
+                                prices. This amount is reserved from your credit
+                                while it runs. If prices change before it
+                                starts, the maximum can change too.
                             </PriceInfoTooltip>
                         </div>
                         <div
@@ -229,9 +224,7 @@ function retry(): void {
                             >
                             <template v-else>—</template>
                         </div>
-                        <p class="mt-0.5 text-xs text-muted-foreground">
-                            USD at the quoted rates
-                        </p>
+                        <p class="mt-0.5 text-xs text-muted-foreground">USD</p>
                     </div>
                 </div>
 
@@ -244,11 +237,6 @@ function retry(): void {
                         anything — generating is a separate, deliberate step.
                     </p>
                 </div>
-
-                <QuoteBreakdown
-                    :quote="quote"
-                    :loading="status === 'pending'"
-                />
             </div>
         </CardContent>
     </Card>

@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\Admin\OperatorReportController;
 use App\Http\Controllers\CreditsController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DownloadGenerationImageController;
 use App\Http\Controllers\GenerationQuoteController;
 use App\Http\Controllers\GenerationsController;
 use App\Http\Controllers\PixelforgeWebhookController;
@@ -18,6 +20,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Distinct prefixes: unprefixed throttles share one per-user counter across routes.
         ->middleware('throttle:10,1,generation-submissions:')
         ->name('generations.store');
+
+    Route::get('generations/{generation}/download', DownloadGenerationImageController::class)
+        ->middleware('throttle:30,1,generation-downloads:')
+        ->name('generations.download');
+
+    Route::get('admin/report', OperatorReportController::class)
+        ->middleware('can:operate')
+        ->name('admin.report');
 
     Route::post('generations/quote', GenerationQuoteController::class)
         ->middleware('throttle:120,1,generation-quotes:')
