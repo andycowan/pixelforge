@@ -139,14 +139,18 @@ void test('local submission state never claims an unrecorded provider result', (
         ).label,
         'Generating',
     );
-    assert.equal(
+    assert.deepEqual(
         describeGenerationState(
             historyItem({
                 submission_status: 'accepted',
                 provider_status: 'succeeded',
             }),
-        ).tone,
-        'success',
+        ),
+        {
+            label: 'Succeeded',
+            detail: 'The provider finished this generation and the exact charge has been settled.',
+            tone: 'success',
+        },
     );
     assert.equal(
         describeGenerationState(

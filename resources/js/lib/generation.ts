@@ -70,7 +70,7 @@ export function describeGenerationState(
     switch (item.provider_status) {
         case 'succeeded':
             return {
-                label: 'Completed',
+                label: 'Succeeded',
                 detail: 'The provider finished this generation and the exact charge has been settled.',
                 tone: 'success',
             };

@@ -1,8 +1,8 @@
 # Pixelforge architecture
 
-Status: **accepted target architecture**. This records the decisions agreed during design; it is not a claim that the application already implements them.
+Status: **accepted architecture**. This records the design decisions; implementation status is summarised below.
 
-The existing app is the Laravel/Vue/Inertia authentication scaffold with a live quote-preview workspace, Postgres and a single FrankenPHP/Caddy app container behind Fairlead. Postgres supersedes the initial SQLite choice: it matches the employer's stack and supports the concurrent settlement workload without SQLite-specific write coordination. The state-owning provider lifecycle machine and generation-request persistence (model, schema, factory, owner scoping and safe history formatting) are implemented and tested. The model hydrates a fresh lifecycle machine but does not persist its mutations. Saloon's public pricing request, validated five-minute catalogue cache, exact quote/actual-cost calculator and authenticated quote endpoint are implemented. The Tailwind workspace previews estimated/maximum prices with token/rate detail; quotes are read-only and Generate is enabled when provider credentials are configured. A separate Generations sidebar item opens authenticated, owner-scoped results/history. Provider submission/retrieval, durable verified webhook inbox, guarded provider-result application, immutable settlement/outbox intent and owned paginated results are now implemented and tested. Supervisor manages the web/queue/scheduler processes; recovery repairs missed dispatches. The bundled Mercure 1.x hub is enabled: an outbox publisher sends private per-user invalidations and the Generations page refreshes its props live (cookie-authorised EventSource, reconnect with refresh). An append-only credit ledger now holds each request's quoted maximum at submission, releases/debits it exactly once at settlement and backs a demo (no-payment) credit purchase; balances show in the sidebar, Credits page and workspace. Reporting/public deployment remain unfinished. Live provider verification requires environment-specific credentials and a publicly reachable webhook URL.
+Implemented and deployed at <https://px.bit-monkey.io>: authentication, exact quoting with a pre-submit estimate and maximum, durable submission and reconciliation through Saloon, verified idempotent webhooks, guarded lifecycle application, exactly-once settlement, live private history over Mercure, an append-only credit ledger with demo purchases and affordability checks, and the operator report reconciled against Pixelforge usage. Every successful `main` build deploys automatically (D-071). Postgres replaced the initial SQLite choice: it matches the employer's stack and handles concurrent settlement without SQLite-specific write coordination. Scheduled production backups with a tested restore, and the browser smoke tests in §10, are still outstanding.
 
 ## 1. Intent and scope
 
@@ -135,7 +135,7 @@ A webhook may arrive before the create response.[4] Correlate it to the existing
 
 ## 6. Persistence and financial invariants
 
-Use Postgres in development, integration tests and production, with the Laravel database queue initially. Fairlead owns local Postgres; Dokploy will run a separate Postgres service in deployment. Add:
+Use Postgres in development, integration tests and production, with the Laravel database queue initially. Fairlead owns local Postgres; Dokploy runs a separate Postgres service in production. Add:
 
 | Table                   | Responsibility                                                                                                                                                                               |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
