@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Http\Integrations\Pixelforge\PixelforgeConnector;
 use Illuminate\Http\Request;
 use JsonException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -12,8 +13,7 @@ final class PixelforgeWebhookVerifier
     public function verify(Request $request): array
     {
         $secret = config('services.pixelforge.webhook_secret');
-        $key = config('services.pixelforge.api_key');
-        if (! is_string($secret) || trim($secret) === '' || ! is_string($key) || trim($key) === '') {
+        if (! is_string($secret) || trim($secret) === '' || PixelforgeConnector::configuredKey() === null) {
             throw new HttpException(503, 'Webhook receiver is not configured.');
         }
 

@@ -2,7 +2,6 @@ import type { Directive } from 'vue';
 import type { Auth } from '@/types/auth';
 import type { CreditBalance } from '@/types/credits';
 
-// Extend ImportMeta interface for Vite...
 declare module 'vite/client' {
     interface ImportMetaEnv {
         readonly VITE_APP_NAME: string;

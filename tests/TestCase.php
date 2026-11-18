@@ -27,7 +27,6 @@ abstract class TestCase extends BaseTestCase
         }
 
         if (self::$databaseSuiteLock === null) {
-            // Independent suites share a schema; serialize them before migration traits run.
             $pdo->exec("SET statement_timeout = '300s'");
             $pdo->query('SELECT pg_advisory_lock('.self::DATABASE_SUITE_LOCK.')');
             $pdo->exec('SET statement_timeout = 0');
@@ -40,7 +39,6 @@ abstract class TestCase extends BaseTestCase
     protected function setUp(): void
     {
         parent::setUp();
-        // The test container shares the live hub's environment; never publish to it.
         Http::preventStrayRequests();
     }
 

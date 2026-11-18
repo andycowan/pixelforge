@@ -23,5 +23,4 @@ foreach (['DATABASE_URL', 'DB_URL'] as $name) {
     $_ENV[$name] = $testUrl;
 }
 
-// Laravel prefers $_SERVER; honour test overrides over inherited container values.
 $_SERVER = array_replace($_SERVER, $_ENV);

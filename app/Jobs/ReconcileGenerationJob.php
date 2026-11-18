@@ -38,8 +38,8 @@ final class ReconcileGenerationJob implements ShouldQueue
 
     public function handle(ApplyProviderGeneration $apply): void
     {
-        $key = config('services.pixelforge.api_key');
-        $fingerprint = is_string($key) && trim($key) !== '' ? hash('sha256', $key) : null;
+        $key = PixelforgeConnector::configuredKey();
+        $fingerprint = $key === null ? null : hash('sha256', $key);
         $generation = DB::transaction(function () use ($fingerprint): ?Generation {
             $generation = Generation::query()->lockForUpdate()->find($this->generationId);
             if ($generation === null || ! $this->checkable($generation) || $generation->next_attempt_at === null || $generation->next_attempt_at->isFuture()) {
@@ -73,7 +73,6 @@ final class ReconcileGenerationJob implements ShouldQueue
                 }
             }
         } catch (FatalRequestException) {
-            // A retrieval transport failure is not provider generation failure.
         } catch (ProviderPayloadException|JsonException|ProviderEvidenceConflict) {
             $delay = null;
         }

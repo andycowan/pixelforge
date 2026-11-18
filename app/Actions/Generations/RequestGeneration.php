@@ -6,10 +6,12 @@ use App\Data\GenerationQuote;
 use App\Enums\GenerationQuality;
 use App\Enums\GenerationSize;
 use App\Exceptions\InsufficientCredit;
+use App\Http\Integrations\Pixelforge\PixelforgeConnector;
 use App\Jobs\SubmitGenerationJob;
 use App\Models\CreditLedgerEntry;
 use App\Models\Generation;
 use App\Models\User;
+use App\Services\GenerationPricing;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -17,19 +19,6 @@ use InvalidArgumentException;
 use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 use Throwable;
 
-/**
- * Accept one owned generation request.
- *
- * The browser never supplies prices, quote snapshots or ownership. The server
- * re-quotes the validated options, freezes the immutable request and only then
- * hands the durable row to submission work. Repeated submissions of the same
- * options for the same user are served from the existing row, even when the
- * current prices have moved.
- *
- * A new request must be covered by available credit at its quoted maximum,
- * which is held in the same owner-locked transaction (D-B02). An unaffordable
- * request creates, holds and queues nothing.
- */
 final class RequestGeneration
 {
     private const UNAVAILABLE_MESSAGE = 'Image generation is currently unavailable. Nothing was created or charged.';
@@ -41,10 +30,10 @@ final class RequestGeneration
     ) {}
 
     /**
-     * @param  array<string, mixed>  $options  Validated options: prompt, size, quality and optional reference_images
+     * @param  array<string, mixed>  $options
      *
-     * @throws ValidationException when the options contradict an existing submission token or credit is insufficient
-     * @throws ServiceUnavailableHttpException when generation is not configured
+     * @throws ValidationException
+     * @throws ServiceUnavailableHttpException
      */
     public function execute(User $user, array $options, string $submissionToken): Generation
     {
@@ -55,9 +44,6 @@ final class RequestGeneration
             throw new InvalidArgumentException('A generation request requires a persisted owner.');
         }
 
-        // A retried browser submission must be answered from the durable row
-        // before quoting or checking configuration: the frozen request is the
-        // authority, not today's price or today's key.
         $existing = $this->findOwned($user, $token);
 
         if ($existing !== null) {
@@ -66,8 +52,6 @@ final class RequestGeneration
 
         $fingerprint = $this->configuredKeyFingerprint();
 
-        // Quoting may contact the pricing endpoint, so it stays outside the
-        // transaction that holds the owner lock.
         $quote = $this->quoteGeneration->execute($prompt, $size, $quality, $referenceImages);
 
         try {
@@ -76,15 +60,13 @@ final class RequestGeneration
             throw ValidationException::withMessages([
                 'credits' => sprintf(
                     'Not enough credit: this request can cost up to %s and your available balance is %s. Buy credits to continue. Nothing was created or charged.',
-                    CreditLedgerEntry::formatDollars($exception->requiredNanodollars),
-                    CreditLedgerEntry::formatDollars($exception->availableNanodollars),
+                    GenerationPricing::formatDollars($exception->requiredNanodollars),
+                    GenerationPricing::formatDollars($exception->availableNanodollars),
                 ),
             ]);
         }
 
         if ($created) {
-            // The row is already durable. Queue dispatch is only an
-            // accelerator; scheduled recovery picks up a lost job.
             $this->dispatchSubmission($generation);
         }
 
@@ -100,9 +82,6 @@ final class RequestGeneration
     private function persist(User $user, string $token, string $prompt, GenerationSize $size, GenerationQuality $quality, array $referenceImages, GenerationQuote $quote, string $fingerprint): array
     {
         return DB::transaction(function () use ($user, $token, $prompt, $size, $quality, $referenceImages, $quote, $fingerprint): array {
-            // Serialise request creation per owner. Two tabs submitting at the
-            // same time cannot both insert the same submission token or both
-            // spend the same credit.
             User::query()->whereKey($user->getKey())->lockForUpdate()->first();
 
             $existing = $this->findOwned($user, $token);
@@ -123,11 +102,8 @@ final class RequestGeneration
                 'maximum_cost_nanodollars' => $quote->maximumCostNanodollars,
             ]);
 
-            // Freeze the key identity before the row can be handed to the
-            // worker. The submission request itself stays immutable.
             $generation->prepareSubmission($fingerprint);
 
-            // Throws before commit when credit is short, rolling back the row.
             CreditLedgerEntry::holdFor($generation);
 
             return [$generation, true];
@@ -209,17 +185,10 @@ final class RequestGeneration
         return $submissionToken;
     }
 
-    /**
-     * The configured key's identity is a one-way fingerprint. The key itself
-     * never leaves configuration and is never stored with the request.
-     */
     private function configuredKeyFingerprint(): string
     {
-        $apiKey = config('services.pixelforge.api_key');
-
-        if (! is_string($apiKey) || trim($apiKey) === '') {
-            throw new ServiceUnavailableHttpException(null, self::UNAVAILABLE_MESSAGE);
-        }
+        $apiKey = PixelforgeConnector::configuredKey()
+            ?? throw new ServiceUnavailableHttpException(null, self::UNAVAILABLE_MESSAGE);
 
         return hash('sha256', $apiKey);
     }
@@ -232,13 +201,7 @@ final class RequestGeneration
             ->first();
     }
 
-    /**
-     * Same token and exactly the same request returns the original row. The
-     * same token with different options is a client conflict, not a new
-     * generation and not a silent edit.
-     *
-     * @param  list<string>  $referenceImages
-     */
+    /** @param  list<string>  $referenceImages */
     private function matchOrConflict(
         Generation $existing,
         string $prompt,
@@ -263,8 +226,6 @@ final class RequestGeneration
         try {
             SubmitGenerationJob::dispatch($generation->id);
         } catch (Throwable $exception) {
-            // The committed request stays valid; the scheduled recovery sweep
-            // finds submissions whose dispatch never landed.
             report($exception);
         }
     }

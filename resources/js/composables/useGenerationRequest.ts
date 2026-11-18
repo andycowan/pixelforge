@@ -1,10 +1,3 @@
-/**
- * Inertia-owned generation submission.
- *
- * The server re-quotes and freezes the request; this composable only holds the
- * browser's deduplication identity, blocks duplicate submissions and turns the
- * server's answers into visible form state.
- */
 import { useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import type { ComputedRef, Ref } from 'vue';
@@ -15,7 +8,7 @@ import {
     readSubmissionError,
     submissionHttpExceptionMessage,
 } from '@/lib/generation';
-import { validateQuoteInput } from '@/lib/quote';
+import { quoteInputKey, validateQuoteInput } from '@/lib/quote';
 import { store } from '@/routes/generations';
 import type { GenerationRequestPayload } from '@/types/generation';
 import type { QuoteFieldErrors, QuoteFormInput } from '@/types/quote';
@@ -23,11 +16,8 @@ import type { QuoteFieldErrors, QuoteFormInput } from '@/types/quote';
 export type UseGenerationRequest = {
     submit: () => void;
     submitting: ComputedRef<boolean>;
-    /** Form-level failure message; field messages stay with their controls. */
     submissionError: Ref<string | null>;
-    /** Server field messages from a rejected generation request. */
     fieldErrors: ComputedRef<QuoteFieldErrors>;
-    /** The server rejected the last request for insufficient credit. */
     creditsRejected: ComputedRef<boolean>;
 };
 
@@ -55,11 +45,6 @@ export function useGenerationRequest(
 
     const submissionError = ref<string | null>(null);
 
-    /**
-     * One token for one exact set of options. Retrying an unchanged submission
-     * reuses it so the server recognises the original; changing an option and
-     * submitting starts a new request with a fresh token.
-     */
     let token: string | null = null;
     let tokenOptionsKey: string | null = null;
 
@@ -80,16 +65,8 @@ export function useGenerationRequest(
         return mapped;
     });
 
-    // Editing invalidates messages about the previous attempt, but the token
-    // is kept until the options actually change at the next submission.
     watch(
-        () =>
-            JSON.stringify([
-                input.value.prompt,
-                input.value.size,
-                input.value.quality,
-                input.value.referenceUrls,
-            ]),
+        () => quoteInputKey(input.value),
         () => {
             submissionError.value = null;
             form.clearErrors();
@@ -114,8 +91,6 @@ export function useGenerationRequest(
             tokenOptionsKey = optionsKey;
         }
 
-        // The submitted snapshot is frozen here: controls are also disabled
-        // while the request is in flight.
         const payload = buildGenerationPayload(request, token);
 
         submissionError.value = null;
@@ -133,7 +108,6 @@ export function useGenerationRequest(
                     response.status,
                 );
 
-                // Handled inline; the page is not being replaced.
                 return false;
             },
             onNetworkError: () => {

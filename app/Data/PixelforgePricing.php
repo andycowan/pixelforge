@@ -66,8 +66,6 @@ final readonly class PixelforgePricing
     }
 
     /**
-     * Monetary rates must remain decimal strings; never accept JSON float rates.
-     *
      * @param  array<string, mixed>  $rates
      * @return array<string, string>
      */
@@ -124,7 +122,6 @@ final readonly class PixelforgePricing
 
     private static function variance(mixed $value): string
     {
-        // Variance is a JSON numeric token rule, not a monetary rate.
         if (is_float($value) && is_finite($value)) {
             $value = json_encode($value, JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
         } elseif (is_int($value)) {

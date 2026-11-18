@@ -131,7 +131,6 @@ final class PixelforgePricingCatalogTest extends TestCase
             $this->catalogue()->get();
             $this->fail('An expired catalogue must not be served.');
         } catch (PricingException) {
-            // Expected: fail closed rather than serving stale prices.
         }
 
         $this->assertCatalogueIsNotCached();
@@ -148,7 +147,6 @@ final class PixelforgePricingCatalogTest extends TestCase
             $this->catalogue()->get();
             $this->fail('A provider failure must not produce a catalogue.');
         } catch (PricingException) {
-            // Expected.
         }
 
         $this->assertCatalogueIsNotCached();
@@ -158,9 +156,7 @@ final class PixelforgePricingCatalogTest extends TestCase
         Saloon::assertSentCount(2);
     }
 
-    /**
-     * @return array<string, array{int}>
-     */
+    /** @return array<string, array{int}> */
     public static function errorStatuses(): array
     {
         return [
@@ -213,9 +209,7 @@ final class PixelforgePricingCatalogTest extends TestCase
         $this->assertCatalogueIsNotCached();
     }
 
-    /**
-     * @return array<string, array{string}>
-     */
+    /** @return array<string, array{string}> */
     public static function invalidProviderPayloads(): array
     {
         $valid = static fn (): array => json_decode(
@@ -273,7 +267,6 @@ final class PixelforgePricingCatalogTest extends TestCase
             $this->catalogue()->get();
             $this->fail('A malformed catalogue must not be accepted.');
         } catch (PricingException) {
-            // Expected.
         }
 
         $this->assertCatalogueIsNotCached();
@@ -305,9 +298,7 @@ final class PixelforgePricingCatalogTest extends TestCase
         );
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     private function pricingPayload(): array
     {
         return json_decode(

@@ -4,19 +4,12 @@ namespace App\Actions\Credits;
 
 use App\Models\CreditLedgerEntry;
 use App\Models\User;
+use App\Services\GenerationPricing;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-/**
- * Demo credit top-up: no payment is taken (D-B06).
- *
- * Fixed packages keep the accepted amounts small and obvious. The client's
- * idempotency token makes a double-click or retry credit once; reusing a token
- * for a different package is a conflict, not a second purchase.
- */
 final class PurchaseCredits
 {
-    /** Package id => whole-cent nanodollars. */
     public const PACKAGES = [
         'usd_5' => 5_000_000_000,
         'usd_10' => 10_000_000_000,
@@ -27,7 +20,7 @@ final class PurchaseCredits
     public static function packages(): array
     {
         return array_map(
-            fn (string $id): array => ['id' => $id, 'amount_usd' => CreditLedgerEntry::format(self::PACKAGES[$id])],
+            fn (string $id): array => ['id' => $id, 'amount_usd' => GenerationPricing::formatUsd(self::PACKAGES[$id])],
             array_keys(self::PACKAGES),
         );
     }

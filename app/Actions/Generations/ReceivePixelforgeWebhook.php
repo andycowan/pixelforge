@@ -20,7 +20,6 @@ final class ReceivePixelforgeWebhook
                 'provider_key_fingerprint' => $fingerprint,
                 'received_at' => now(),
             ]);
-            // JSONB does not preserve object-key ordering; compare values without losing scalar types.
             if ($event->provider_key_fingerprint !== $fingerprint || ! $this->sameEvidence($event->payload, $payload)) {
                 throw new HttpException(409, 'Webhook event identity conflicts with recorded evidence.');
             }
@@ -32,7 +31,6 @@ final class ReceivePixelforgeWebhook
             try {
                 ProcessWebhookEventJob::dispatch($event->id);
             } catch (Throwable) {
-                // Do not log dispatcher exceptions: a sync driver could include provider evidence.
                 report(new RuntimeException('Webhook dispatch failed for event '.$event->id.'; durable receipt retained.'));
             }
         }

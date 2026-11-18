@@ -3,6 +3,7 @@
 namespace App\Data;
 
 use App\Exceptions\PricingException;
+use App\Services\GenerationPricing;
 use JsonSerializable;
 
 final readonly class GenerationQuote implements JsonSerializable
@@ -49,10 +50,9 @@ final readonly class GenerationQuote implements JsonSerializable
     public function toArray(): array
     {
         return [
-            // Customer prices only: provider costs, tokens, rates and markup stay server-side (in snapshot()).
             'currency' => 'usd',
-            'estimated_cost_usd' => self::format($this->estimatedCostNanodollars),
-            'maximum_cost_usd' => self::format($this->maximumCostNanodollars),
+            'estimated_cost_usd' => GenerationPricing::formatUsd($this->estimatedCostNanodollars),
+            'maximum_cost_usd' => GenerationPricing::formatUsd($this->maximumCostNanodollars),
         ];
     }
 
@@ -60,10 +60,5 @@ final readonly class GenerationQuote implements JsonSerializable
     public function jsonSerialize(): array
     {
         return $this->toArray();
-    }
-
-    private static function format(int $nanodollars): string
-    {
-        return sprintf('%d.%09d', intdiv($nanodollars, 1_000_000_000), $nanodollars % 1_000_000_000);
     }
 }

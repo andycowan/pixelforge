@@ -4,13 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Actions\Credits\PurchaseCredits;
 use App\Http\Requests\PurchaseCreditsRequest;
-use App\Models\CreditLedgerEntry;
+use App\Services\GenerationPricing;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 
-/**
- * Validated input -> demo purchase -> back to the credits page.
- */
 final class PurchaseCreditsController extends Controller
 {
     public function __invoke(PurchaseCreditsRequest $request, PurchaseCredits $purchaseCredits): RedirectResponse
@@ -21,7 +18,7 @@ final class PurchaseCreditsController extends Controller
         Inertia::flash('toast', [
             'type' => 'success',
             'message' => $result['created']
-                ? sprintf('Added %s of demo credit. No payment was taken.', CreditLedgerEntry::formatDollars($result['entry']->amount_nanodollars))
+                ? sprintf('Added %s of demo credit. No payment was taken.', GenerationPricing::formatDollars($result['entry']->amount_nanodollars))
                 : 'This purchase was already applied. Nothing more was added.',
         ]);
 

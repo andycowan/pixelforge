@@ -37,20 +37,15 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
 
-    /** New users are never operators until granted with `users:admin` (D-060). */
     protected $attributes = ['is_admin' => false];
 
-    /**
-     * @return HasMany<Generation, $this>
-     */
+    /** @return HasMany<Generation, $this> */
     public function generations(): HasMany
     {
         return $this->hasMany(Generation::class);
     }
 
-    /**
-     * @return HasMany<CreditLedgerEntry, $this>
-     */
+    /** @return HasMany<CreditLedgerEntry, $this> */
     public function creditLedgerEntries(): HasMany
     {
         return $this->hasMany(CreditLedgerEntry::class);
@@ -58,7 +53,6 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
 
     public function assertCanDelete(): void
     {
-        // Ledger entries are financial evidence too, even without generations (D-047).
         if ($this->exists && ($this->generations()->exists() || $this->creditLedgerEntries()->exists())) {
             throw new AccountHasGenerations;
         }
@@ -78,11 +72,7 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
         });
     }
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
+    /** @return array<string, string> */
     protected function casts(): array
     {
         return [

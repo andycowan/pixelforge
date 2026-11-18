@@ -7,9 +7,6 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('generations', function (Blueprint $table) {
@@ -51,8 +48,6 @@ return new class extends Migration
             $table->index(['user_id', 'created_at']);
         });
 
-        // Freeze the supported values in the migration. Historical migrations
-        // must not follow later changes to the application enum cases.
         DB::statement("ALTER TABLE generations ADD CONSTRAINT generations_size_check CHECK (size IN ('1024x1024', '1536x1024', '1024x1536'))");
         DB::statement("ALTER TABLE generations ADD CONSTRAINT generations_quality_check CHECK (quality IN ('low', 'medium', 'high'))");
         DB::statement("ALTER TABLE generations ADD CONSTRAINT generations_submission_status_check CHECK (submission_status IN ('pending', 'uncertain', 'accepted', 'rejected'))");
@@ -66,7 +61,6 @@ return new class extends Migration
         DB::statement('ALTER TABLE generations ADD CONSTRAINT generations_submission_attempts_nonnegative_check CHECK (submission_attempts >= 0)');
         DB::statement('ALTER TABLE generations ADD CONSTRAINT generations_revision_nonnegative_check CHECK (revision >= 0)');
 
-        // CASE keeps jsonb_array_length from evaluating a non-array value.
         DB::statement("ALTER TABLE generations ADD CONSTRAINT generations_reference_images_shape_check CHECK (CASE WHEN jsonb_typeof(reference_images) = 'array' THEN jsonb_array_length(reference_images) <= 4 ELSE FALSE END)");
         DB::statement("ALTER TABLE generations ADD CONSTRAINT generations_quote_snapshot_object_check CHECK (jsonb_typeof(quote_snapshot) = 'object' AND quote_snapshot <> '{}'::jsonb)");
 
@@ -75,14 +69,9 @@ return new class extends Migration
         DB::statement("ALTER TABLE generations ADD CONSTRAINT generations_usage_object_check CHECK (usage IS NULL OR jsonb_typeof(usage) = 'object')");
         DB::statement("ALTER TABLE generations ADD CONSTRAINT generations_provider_error_object_check CHECK (provider_error IS NULL OR jsonb_typeof(provider_error) = 'object')");
 
-        // Accepted work must have a known provider identity. This does not
-        // validate provider payloads or substitute for the future apply action.
         DB::statement("ALTER TABLE generations ADD CONSTRAINT generations_accepted_requires_provider_identity_check CHECK (submission_status <> 'accepted' OR (provider_id IS NOT NULL AND provider_status IS NOT NULL))");
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('generations');

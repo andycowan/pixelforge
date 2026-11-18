@@ -61,11 +61,9 @@ final class GenerationQuoteTest extends TestCase
         $response = $this->quote()->assertOk();
 
         $response->assertExactJson([
-            // Customer prices only: no provider cost, tokens, rates or markup.
             'currency' => 'usd',
             'estimated_cost_usd' => '0.080000000',
             'maximum_cost_usd' => '0.090000000',
-            // A new user has no credit; CreditBalanceTest covers the true case.
             'affordable' => false,
         ]);
 
@@ -81,7 +79,6 @@ final class GenerationQuoteTest extends TestCase
 
         $response = $this->quote(['reference_images' => [$reference, $reference]])->assertOk();
 
-        // Two copies of the same reference raise the price over the no-reference $0.08/$0.09.
         $response->assertJsonPath('estimated_cost_usd', '0.100000000');
         $response->assertJsonPath('maximum_cost_usd', '0.110000000');
         $this->assertDatabaseCount('generations', 0);
@@ -135,9 +132,7 @@ final class GenerationQuoteTest extends TestCase
         $this->assertDatabaseCount('generations', 0);
     }
 
-    /**
-     * @return array<string, array{array<string, mixed>, list<string>}>
-     */
+    /** @return array<string, array{array<string, mixed>, list<string>}> */
     public static function invalidInputs(): array
     {
         return [
@@ -235,7 +230,6 @@ final class GenerationQuoteTest extends TestCase
         $this->assertQuoteIsNotCacheable($response);
         $this->assertDatabaseCount('generations', 0);
 
-        // The cause is reported server-side, but the response above stays generic.
         Log::shouldHaveReceived('error')->atLeast()->once();
     }
 
@@ -291,8 +285,6 @@ final class GenerationQuoteTest extends TestCase
 
         $this->quote()->assertStatus(429);
 
-        // The catalogue is cached, so the browser-facing limit never multiplies
-        // outbound provider traffic.
         Saloon::assertSentCount(1);
         $this->assertDatabaseCount('generations', 0);
     }
@@ -303,9 +295,7 @@ final class GenerationQuoteTest extends TestCase
             ->postJson(route('generations.quote'), array_replace($this->validPayload(), $overrides));
     }
 
-    /**
-     * @return array{prompt: string, size: string, quality: string}
-     */
+    /** @return array{prompt: string, size: string, quality: string} */
     private function validPayload(): array
     {
         return [
@@ -329,9 +319,7 @@ final class GenerationQuoteTest extends TestCase
         return (string) file_get_contents(base_path('tests/Fixtures/pixelforge-pricing.json'));
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     private function pricingPayload(): array
     {
         return json_decode($this->pricingJson(), true, 512, JSON_THROW_ON_ERROR);

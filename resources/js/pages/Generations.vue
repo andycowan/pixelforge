@@ -27,11 +27,8 @@ defineOptions({
 });
 
 const props = defineProps<{
-    /** Owned, paginated history with the model's safe public projection. */
     generations: GenerationPaginator;
-    /** Current prompt search, as applied by the server. */
     search: string | null;
-    /** Same-origin hub path and this user's private topic. */
     live: { hub: string; topic: string };
 }>();
 
@@ -43,7 +40,6 @@ const { state: streamState } = useGenerationStream(
 
 const refreshing = ref(false);
 
-/** Manual fallback while the live stream is connecting or reconnecting. */
 function refresh(): void {
     router.reload({
         only: ['generations', 'credits'],
@@ -58,9 +54,8 @@ function refresh(): void {
 
 const hasItems = computed(() => props.generations.data.length > 0);
 
-// Prompt search runs on the server so pagination and live reloads keep the filter.
 const query = ref(props.search ?? '');
-let searchTimer: ReturnType<typeof setTimeout> | null = null;
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
 function applySearch(): void {
     const search = query.value.trim();
@@ -74,19 +69,17 @@ function applySearch(): void {
 }
 
 function onSearchInput(): void {
-    if (searchTimer !== null) clearTimeout(searchTimer);
+    clearTimeout(searchTimer);
     searchTimer = setTimeout(applySearch, 300);
 }
 
 function clearSearch(): void {
     query.value = '';
-    if (searchTimer !== null) clearTimeout(searchTimer);
+    clearTimeout(searchTimer);
     applySearch();
 }
 
-onBeforeUnmount(() => {
-    if (searchTimer !== null) clearTimeout(searchTimer);
-});
+onBeforeUnmount(() => clearTimeout(searchTimer));
 </script>
 
 <template>

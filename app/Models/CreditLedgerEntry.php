@@ -16,14 +16,6 @@ use InvalidArgumentException;
 use LogicException;
 
 /**
- * One immutable credit ledger entry.
- *
- * Available credit = purchases + releases - holds - debits, always summed from
- * these rows. A generation has at most one hold, one release and one debit
- * (unique generation/type). Settlement releases the WHOLE hold and debits the
- * actual charge as a separate entry, so every terminal outcome is uniform and
- * the debit always equals the generation charge's customer cost.
- *
  * @property int $id
  * @property int|null $user_id
  * @property CreditEntryType $type
@@ -35,17 +27,13 @@ use LogicException;
  */
 final class CreditLedgerEntry extends Model
 {
-    /** Largest single purchase the model accepts, whatever the HTTP packages say. */
     public const MAX_PURCHASE_NANODOLLARS = 100 * 1_000_000_000;
 
-    /** Signed contribution of a row to available credit (D-B01, D-B16). */
+    public const MAX_ADJUSTMENT_NANODOLLARS = 1_000 * 1_000_000_000;
+
     private const AVAILABLE_SQL = "CASE WHEN type IN ('purchase', 'release', 'credit_adjustment') THEN amount_nanodollars ELSE -amount_nanodollars END";
 
-    /** Signed contribution of a row to credit held for unfinished generations. */
     private const HELD_SQL = "CASE type WHEN 'hold' THEN amount_nanodollars WHEN 'release' THEN -amount_nanodollars ELSE 0 END";
-
-    /** Largest single operator adjustment; a typo guard, not a business limit (D-B16). */
-    public const MAX_ADJUSTMENT_NANODOLLARS = 1_000 * 1_000_000_000;
 
     public $timestamps = false;
 
@@ -69,29 +57,18 @@ final class CreditLedgerEntry extends Model
         return $this->belongsTo(Generation::class);
     }
 
-    /**
-     * Credit the user could spend now. Negative only after a charge exceeded
-     * its hold (D-B03).
-     */
     public static function availableFor(User $user): int
     {
         // shortcut: sums the user's whole ledger on every read; add a periodic balance snapshot if per-user entries grow into the hundreds of thousands.
         return self::sumFor($user, self::AVAILABLE_SQL);
     }
 
-    /** Credit reserved by generations whose outcome is not settled yet. */
     public static function heldFor(User $user): int
     {
         return self::sumFor($user, self::HELD_SQL);
     }
 
-    /**
-     * Customer credit held across ALL users right now (the operator "bank"),
-     * with the same formulas as per-user balances so the two always agree.
-     * Includes ownerless rows: deleting a user does not spend their credit.
-     *
-     * @return array{available: int, held: int}
-     */
+    /** @return array{available: int, held: int} */
     public static function bank(): array
     {
         $row = self::query()->selectRaw('COALESCE(SUM('.self::AVAILABLE_SQL.'), 0) AS available, COALESCE(SUM('.self::HELD_SQL.'), 0) AS held')->toBase()->first();
@@ -103,8 +80,8 @@ final class CreditLedgerEntry extends Model
     public static function balanceFor(User $user): array
     {
         return [
-            'available_usd' => self::format(self::availableFor($user)),
-            'held_usd' => self::format(self::heldFor($user)),
+            'available_usd' => GenerationPricing::formatUsd(self::availableFor($user)),
+            'held_usd' => GenerationPricing::formatUsd(self::heldFor($user)),
         ];
     }
 
@@ -113,10 +90,6 @@ final class CreditLedgerEntry extends Model
         return self::availableFor($user) >= $nanodollars;
     }
 
-    /**
-     * Append a purchase once per client idempotency key. A repeated key returns
-     * the original entry unchanged; callers decide whether its amount conflicts.
-     */
     public static function purchase(User $user, int $nanodollars, string $idempotencyKey): self
     {
         self::assertTransaction();
@@ -132,10 +105,6 @@ final class CreditLedgerEntry extends Model
         return $existing ?? self::record($user->getKey(), CreditEntryType::Purchase, $nanodollars, idempotencyKey: $idempotencyKey);
     }
 
-    /**
-     * Record an operator adjustment: positive adds credit, negative removes it
-     * (D-B16). The caller decides the amount, typically under the owner lock.
-     */
     public static function adjust(User $user, int $signedNanodollars, string $reason): self
     {
         self::assertTransaction();
@@ -153,12 +122,7 @@ final class CreditLedgerEntry extends Model
         return self::record($user->getKey(), $type, $amount, reason: $reason);
     }
 
-    /**
-     * Reserve the generation's quoted maximum. Locks the owner row (a no-op if
-     * the caller already holds it) so concurrent requests see each other's holds.
-     *
-     * @throws InsufficientCredit
-     */
+    /** @throws InsufficientCredit */
     public static function holdFor(Generation $generation): self
     {
         self::assertTransaction();
@@ -174,10 +138,6 @@ final class CreditLedgerEntry extends Model
         return self::record($generation->user_id, CreditEntryType::Hold, $generation->maximum_cost_nanodollars, $generation->id);
     }
 
-    /**
-     * Return the whole hold to available credit. Idempotent; generations from
-     * before the ledger have no hold and get no entries.
-     */
     public static function releaseHoldFor(Generation $generation): ?self
     {
         self::assertTransaction();
@@ -190,10 +150,6 @@ final class CreditLedgerEntry extends Model
             ?? self::record($hold->user_id, CreditEntryType::Release, $hold->amount_nanodollars, $generation->id);
     }
 
-    /**
-     * Release the hold and debit exactly the settled customer charge, once.
-     * The debit is not capped by the hold (D-B03).
-     */
     public static function settle(Generation $generation, GenerationCharge $charge): ?self
     {
         self::assertTransaction();
@@ -202,7 +158,7 @@ final class CreditLedgerEntry extends Model
         }
         $hold = self::entryFor($generation, CreditEntryType::Hold);
         if ($hold === null) {
-            return null; // Pre-ledger generation: no retroactive debit.
+            return null;
         }
         self::releaseHoldFor($generation);
         $debit = self::entryFor($generation, CreditEntryType::Debit);
@@ -217,12 +173,7 @@ final class CreditLedgerEntry extends Model
         return self::record($hold->user_id, CreditEntryType::Debit, $charge->customer_cost_nanodollars, $generation->id);
     }
 
-    /**
-     * Recent activity for display. A released hold nets to zero, so it and its
-     * release are omitted; active holds, purchases and debits remain (D-B13).
-     *
-     * @return array<int, array<string, mixed>>
-     */
+    /** @return array<int, array<string, mixed>> */
     public static function recentFor(User $user, int $limit = 50): array
     {
         return self::query()->where('user_id', $user->getKey())
@@ -238,9 +189,8 @@ final class CreditLedgerEntry extends Model
         return [
             'id' => $this->id,
             'type' => $this->type->value,
-            'amount_usd' => self::format($this->amount_nanodollars),
+            'amount_usd' => GenerationPricing::formatUsd($this->amount_nanodollars),
             'generation_id' => $this->generation_id,
-            // Generation entries show a short single-line prompt excerpt (the full prompt stays on Generations); adjustments show their reason.
             'detail' => $this->reason ?? ($this->generation === null ? null : Str::limit(Str::squish($this->generation->prompt), 60, '…')),
             'created_at' => $this->created_at->toIso8601String(),
         ];
@@ -265,21 +215,6 @@ final class CreditLedgerEntry extends Model
     public function delete()
     {
         throw new LogicException('Credit ledger entries are retained as financial evidence.');
-    }
-
-    public static function format(int $nanodollars): string
-    {
-        $magnitude = abs($nanodollars);
-
-        return ($nanodollars < 0 ? '-' : '').sprintf('%d.%09d', intdiv($magnitude, 1_000_000_000), $magnitude % 1_000_000_000);
-    }
-
-    /** Whole-cent customer amount for messages (D-054): "$0.45", or "-$0.04" for an overrun balance. */
-    public static function formatDollars(int $nanodollars): string
-    {
-        $cents = intdiv(abs($nanodollars), GenerationPricing::CENT);
-
-        return ($nanodollars < 0 ? '-' : '').sprintf('$%d.%02d', intdiv($cents, 100), $cents % 100);
     }
 
     private static function record(?int $userId, CreditEntryType $type, int $nanodollars, ?string $generationId = null, ?string $idempotencyKey = null, ?string $reason = null): self

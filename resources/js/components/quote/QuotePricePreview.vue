@@ -17,8 +17,9 @@ import {
     formatCurrency,
     formatUsdAmount,
     parseReferenceUrls,
-    quoteQualityOptions,
-    quoteSizeOptions,
+    qualityLabel,
+    referenceImagesLabel,
+    sizeLabel,
 } from '@/lib/quote';
 import type {
     QuoteFailure,
@@ -54,23 +55,15 @@ const failureTitle = computed(() =>
         : failureTitles[props.failure.kind],
 );
 
-// The quote is cleared whenever an input changes, so this label always
-// describes the inputs the displayed price belongs to.
 const contextLabel = computed(() => {
-    const size =
-        quoteSizeOptions.find((option) => option.value === props.input.size)
-            ?.label ?? props.input.size;
-    const quality =
-        quoteQualityOptions.find(
-            (option) => option.value === props.input.quality,
-        )?.label ?? props.input.quality;
     const references = parseReferenceUrls(props.input.referenceUrls).length;
-    const parts = [size, `${quality} quality`];
+    const parts = [
+        sizeLabel(props.input.size),
+        `${qualityLabel(props.input.quality)} quality`,
+    ];
 
     if (references > 0) {
-        parts.push(
-            `${references} reference ${references === 1 ? 'image' : 'images'}`,
-        );
+        parts.push(referenceImagesLabel(references));
     }
 
     return parts.join(' · ');
@@ -87,7 +80,6 @@ const announcement = computed<string>(() => {
         return `Estimate updated: ${formatUsdAmount(props.quote.estimated_cost_usd)} ${currency} estimated, ${formatUsdAmount(props.quote.maximum_cost_usd)} ${currency} maximum.`;
     }
 
-    // Field errors are announced by the form; server failures use the alert.
     return '';
 });
 

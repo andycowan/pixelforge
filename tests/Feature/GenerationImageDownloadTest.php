@@ -41,10 +41,8 @@ final class GenerationImageDownloadTest extends TestCase
             ->assertHeader('X-Content-Type-Options', 'nosniff');
         $this->assertSame(self::PNG, $response->getContent());
         $this->assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
-        // Cut at a word boundary within 40 characters, never mid-word.
         $expected = 'pixelforge-a-misty-harbour-at-dawn-with-gulls-'.strtolower(substr($generation->id, -6)).'.png';
         $this->assertSame('attachment; filename='.$expected, $response->headers->get('Content-Disposition'));
-        // Fetched from the stored signed URL, without our API key.
         Saloon::assertSent(fn (GetGenerationImage $request, Response $sent): bool => $sent->getPendingRequest()->getUrl() === self::IMAGE_URL
             && $sent->getPendingRequest()->headers()->get('Authorization') === null);
     }
@@ -111,7 +109,6 @@ final class GenerationImageDownloadTest extends TestCase
     private function withImage(User $user, string $url = self::IMAGE_URL, mixed $expiresAt = null, string $prompt = 'A lighthouse'): Generation
     {
         $generation = Generation::factory()->for($user)->create(['prompt' => $prompt]);
-        // Test fixture only: provider evidence is normally written by the settlement workflow.
         DB::table('generations')->where('id', $generation->id)->update(['image_url' => $url, 'image_url_expires_at' => $expiresAt ?? now()->addHour()]);
 
         return $generation->fresh();

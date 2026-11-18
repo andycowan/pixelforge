@@ -54,6 +54,5 @@ return new class extends Migration
     {
         Schema::dropIfExists('outbox_messages');
         Schema::dropIfExists('generation_charges');
-        // Keep widened timestamps: rollback must not round retained provider evidence.
     }
 };

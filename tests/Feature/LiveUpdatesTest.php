@@ -61,7 +61,6 @@ final class LiveUpdatesTest extends TestCase
             'topics' => [['match' => "https://pixelforge.test/users/{$user->id}/generations"]],
         ]], $claims['authorization_details']);
 
-        // Signed with the subscriber key only: the publisher key must not verify it.
         $this->assertFalse($this->signatureMatches($cookie->getValue(), self::PUBLISHER_KEY));
     }
 
@@ -76,7 +75,6 @@ final class LiveUpdatesTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('live.hub', '/.well-known/mercure')
                 ->where('live.topic', "https://pixelforge.test/users/{$user->id}/generations"));
-        // Laravel must not encrypt it: the hub reads a raw JWT.
         $this->verified($response->getCookie(Mercure::COOKIE, decrypt: false)->getValue(), self::SUBSCRIBER_KEY);
     }
 
@@ -117,7 +115,6 @@ final class LiveUpdatesTest extends TestCase
             return $request->url() === 'http://hub.internal/.well-known/mercure'
                 && $request['topic'] === $topic
                 && $request['private'] === 'on'
-                // JSONB does not preserve key order, so compare as a dictionary.
                 && json_decode($request['data'], true) == ['generation_id' => $generation->id, 'revision' => 1]
                 && $claims['authorization_details'][0]['actions'] === ['publish']
                 && $claims['authorization_details'][0]['topics'] === [['match' => $topic]];
@@ -140,7 +137,7 @@ final class LiveUpdatesTest extends TestCase
         $this->assertSame([0, 1], OutboxMessage::query()->whereNull('published_at')->orderBy('publication_attempts')->pluck('publication_attempts')->all());
 
         app(RecoverGenerationWork::class)->execute();
-        Queue::assertPushed(PublishOutboxJob::class, 3); // two commits plus one recovery
+        Queue::assertPushed(PublishOutboxJob::class, 3);
     }
 
     public function test_ownerless_intent_is_retired_without_publishing(): void

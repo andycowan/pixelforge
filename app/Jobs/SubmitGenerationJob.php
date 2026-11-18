@@ -43,8 +43,8 @@ final class SubmitGenerationJob implements ShouldQueue
 
     public function handle(ApplyProviderGeneration $apply, GenerationSubmissionPolicy $policy): void
     {
-        $key = config('services.pixelforge.api_key');
-        $fingerprint = is_string($key) && trim($key) !== '' ? hash('sha256', $key) : null;
+        $key = PixelforgeConnector::configuredKey();
+        $fingerprint = $key === null ? null : hash('sha256', $key);
         $notify = false;
         $claim = DB::transaction(function () use ($fingerprint, &$notify): ?array {
             $notify = false;
@@ -155,17 +155,12 @@ final class SubmitGenerationJob implements ShouldQueue
         }
     }
 
-    /**
-     * Record a visible submission change together with its notification intent.
-     *
-     * @param  array{code:string,message:string,retryable:bool}  $error
-     */
+    /** @param  array{code:string,message:string,retryable:bool}  $error */
     private static function recordProblem(Generation $generation, array $error, ?CarbonInterface $retryAt, GenerationSubmissionStatus $status): bool
     {
         $revision = $generation->revision;
         $generation->recordSubmissionProblem($error, $retryAt, $status);
         if ($generation->submission_status === GenerationSubmissionStatus::Rejected) {
-            // A definitive rejection is never billed; paused or uncertain work keeps its hold.
             CreditLedgerEntry::releaseHoldFor($generation);
         }
         if ($generation->revision === $revision) {

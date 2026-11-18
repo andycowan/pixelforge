@@ -31,7 +31,6 @@ final class GenerationSettlementTest extends TestCase
         $apply->execute($generation->id, $this->evidence($generation, changes: ['rates' => $rates, 'usage' => $usage]), $this->fingerprint());
         $charge = $generation->fresh()->charge;
         $this->assertSame(2, $charge->provider_cost_nanodollars);
-        // 2 provider nanodollars x 5/4 = 2.5 nanodollars, which still charges one whole cent.
         $this->assertSame(10_000_000, $charge->customer_cost_nanodollars);
         $this->assertSame('0.010000000', $generation->fresh()->toHistoryArray()['actual_cost_usd']);
         $this->assertSame(5, $charge->markup_numerator);
@@ -84,7 +83,6 @@ final class GenerationSettlementTest extends TestCase
             ['estimated_cost_nanodollars' => 80_000_000, 'maximum_cost_nanodollars' => 90_000_000]], $current);
 
         $migration->down();
-        // Old policy: x 5/4 rounded half-up to the nanodollar, from the same stored inputs.
         $this->assertSame([['customer_cost_nanodollars' => intdiv($provider * 5 + 2, 4), 'rounding' => 'half_up', 'scale' => 9],
             ['estimated_cost_nanodollars' => 72_206_250, 'maximum_cost_nanodollars' => 86_275_000]], $row());
         $this->assertSame('half_up', $generation->fresh()->quote_snapshot['policy']['rounding']);
@@ -93,7 +91,6 @@ final class GenerationSettlementTest extends TestCase
         $this->assertSame($current, $row());
         $this->assertSame(['ceiling', 2], [$generation->fresh()->quote_snapshot['policy']['rounding'], $generation->fresh()->quote_snapshot['policy']['precision']]);
         try {
-            // A savepoint keeps the surrounding test transaction usable.
             DB::transaction(fn () => DB::table('generation_charges')->update(['customer_cost_nanodollars' => $ceilingCents($provider) + 1]));
             $this->fail('A charge off the whole-cent formula must be rejected.');
         } catch (QueryException $exception) {
@@ -110,7 +107,6 @@ final class GenerationSettlementTest extends TestCase
         ]);
         app(ApplyProviderGeneration::class)->execute($generation->id, $provider, $this->fingerprint());
         $this->assertSame(7_205_759_403_792_794, $generation->fresh()->charge->provider_cost_nanodollars);
-        // x 5/4 = 9,007,199,254,740,992.5, rounded up to the cent: still above JavaScript's safe integer range.
         $this->assertSame(9_007_199_260_000_000, $generation->fresh()->charge->customer_cost_nanodollars);
         $this->assertSame('9007199.260000000', $generation->fresh()->toHistoryArray()['actual_cost_usd']);
     }
@@ -120,7 +116,6 @@ final class GenerationSettlementTest extends TestCase
         $generation = $this->preparedGeneration();
         $apply = app(ApplyProviderGeneration::class);
         $apply->execute($generation->id, $this->evidence($generation), $this->fingerprint());
-        // Trusted operator retention path; the product deletion boundary lives on User.
         DB::table('users')->where('id', $generation->user_id)->delete();
         $this->assertNull($generation->fresh()->user_id);
         $this->assertNull(OutboxMessage::query()->firstOrFail()->user_id);
@@ -298,7 +293,6 @@ final class GenerationSettlementTest extends TestCase
     /** @param array<string, mixed> $object */
     private function inbox(array $object, string $id, ?string $fingerprint = null): WebhookEvent
     {
-        // Receipt model API is deliberately not part of the settlement contract.
         DB::table('webhook_events')->insert([
             'id' => $id,
             'payload' => json_encode(['id' => $id, 'object' => 'event', 'type' => 'generation.'.$object['status'], 'data' => ['object' => $object]], JSON_THROW_ON_ERROR),

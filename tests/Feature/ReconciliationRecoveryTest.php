@@ -121,12 +121,11 @@ final class ReconciliationRecoveryTest extends TestCase
             $this->inbox('evt_recovery'.$i);
         }
         $this->travel(15)->seconds();
-        Queue::fake(); // Count only what recovery dispatches, not the fixtures' own notifications.
+        Queue::fake();
         $this->artisan('generations:recover')->expectsOutput('Dispatched 20 durable generation work items.')->assertSuccessful();
         Queue::assertPushed(ProcessWebhookEventJob::class, 7);
         Queue::assertPushed(SubmitGenerationJob::class, 7);
         Queue::assertPushed(ReconcileGenerationJob::class, 6);
-        // Plus one publisher for the accepted fixtures' unpublished notification intent.
         Queue::assertPushed(PublishOutboxJob::class, 1);
         $this->assertSame(21, Queue::size());
     }

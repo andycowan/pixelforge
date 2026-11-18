@@ -5,20 +5,12 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-/**
- * Append-only customer credit ledger.
- *
- * Additive only: existing users start with no entries (a zero balance) and
- * already-settled generations get no retroactive hold or debit. Balances are
- * always derived from these rows, never stored as an editable number.
- */
 return new class extends Migration
 {
     public function up(): void
     {
         Schema::create('credit_ledger_entries', function (Blueprint $table): void {
             $table->id();
-            // Matches generations: deliberate operator deletion keeps evidence and nulls ownership.
             $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->string('type');
             $table->bigInteger('amount_nanodollars');
@@ -38,8 +30,6 @@ return new class extends Migration
             OR (type <> 'purchase' AND generation_id IS NOT NULL AND idempotency_key IS NULL)
         )");
 
-        // Entries are evidence: no edits or deletes. The only permitted update is
-        // the ON DELETE SET NULL of ownership during deliberate operator deletion.
         DB::unprepared(<<<'SQL'
             CREATE OR REPLACE FUNCTION credit_ledger_entries_append_only() RETURNS trigger AS $$
             BEGIN

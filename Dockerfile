@@ -4,7 +4,6 @@ FROM dunglas/frankenphp:1-php8.4-bookworm AS php-base
 
 RUN install-php-extensions pdo_pgsql pcntl
 
-# Assets are built with PHP available because Wayfinder runs artisan during Vite builds.
 FROM php-base AS assets
 
 ARG NODE_VERSION=26.13.1

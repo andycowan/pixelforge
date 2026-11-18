@@ -28,10 +28,8 @@ defineOptions({
 const props = defineProps<{
     packages: CreditPackage[];
     entries: CreditEntry[];
-    /** Same-origin hub path and this user's private topic. */
     live: { hub: string; topic: string };
 }>();
-// Holds, releases and charges follow generation changes, so the same stream refreshes them.
 const { state: streamState } = useGenerationStream(
     props.live.hub,
     props.live.topic,
@@ -68,7 +66,6 @@ function purchase(packageId: string): void {
                     ? 'Too many purchases. Wait a minute, then retry the same package.'
                     : 'The purchase could not be confirmed. Retry the same package to avoid duplicate credit.';
 
-            // Handled inline; the page is not being replaced.
             return false;
         },
         onNetworkError: () => {
@@ -205,7 +202,6 @@ function timestamp(value: string): string {
             </CardHeader>
             <CardContent>
                 <ul v-if="entries.length" class="divide-y">
-                    <!-- Stacked on narrow screens; one aligned line from sm upwards. -->
                     <li
                         v-for="entry in entries"
                         :key="entry.id"

@@ -9,16 +9,11 @@ use App\Enums\ProviderGenerationStatus;
 use App\Exceptions\PricingException;
 use App\Exceptions\ProviderPayloadException;
 use App\Services\GenerationPricing;
+use BackedEnum;
 use Carbon\CarbonImmutable;
+use Saloon\Http\Response;
 use Throwable;
 
-/**
- * One validated provider generation object, shared by create responses,
- * retrieval responses and webhook data objects.
- *
- * The raw payload is retained because callers must be able to compare a
- * stored webhook object with the exact evidence that was verified.
- */
 final readonly class ProviderGeneration
 {
     private const FIELDS = [
@@ -79,24 +74,9 @@ final readonly class ProviderGeneration
             self::invalid('id');
         }
 
-        $status = is_string($payload['status'])
-            ? ProviderGenerationStatus::tryFrom($payload['status'])
-            : null;
-        if ($status === null) {
-            self::invalid('status');
-        }
-
-        $size = is_string($payload['size']) ? GenerationSize::tryFrom($payload['size']) : null;
-        if ($size === null) {
-            self::invalid('size');
-        }
-
-        $quality = is_string($payload['quality'])
-            ? GenerationQuality::tryFrom($payload['quality'])
-            : null;
-        if ($quality === null) {
-            self::invalid('quality');
-        }
+        $status = self::enum(ProviderGenerationStatus::class, $payload['status'], 'status');
+        $size = self::enum(GenerationSize::class, $payload['size'], 'size');
+        $quality = self::enum(GenerationQuality::class, $payload['quality'], 'quality');
 
         $rates = self::rates($payload['rates']);
         $usage = self::usage($payload['usage'], $rates);
@@ -110,8 +90,6 @@ final readonly class ProviderGeneration
         $startedAt = self::date($payload['started_at'], 'started_at', nullable: true);
         $completedAt = self::date($payload['completed_at'], 'completed_at', nullable: true);
 
-        // Compare parsed instants so ordering cannot be hidden by textual
-        // differences in the accepted timestamp representation.
         if ($startedAt !== null && $startedAt < $createdAt) {
             self::invalid('started_at');
         }
@@ -151,11 +129,22 @@ final readonly class ProviderGeneration
         );
     }
 
-    /**
-     * The original validated wire payload, for evidence comparisons.
-     *
-     * @return array<string, mixed>
-     */
+    public static function fromResponse(Response $response): self
+    {
+        try {
+            /** @var mixed $payload */
+            $payload = $response->json();
+        } catch (Throwable $exception) {
+            throw new ProviderPayloadException('Invalid Pixelforge generation response.', previous: $exception);
+        }
+        if (! is_array($payload)) {
+            throw new ProviderPayloadException('Invalid Pixelforge generation response.');
+        }
+
+        return self::fromArray($payload);
+    }
+
+    /** @return array<string, mixed> */
     public function toArray(): array
     {
         return $this->payload;
@@ -164,12 +153,7 @@ final readonly class ProviderGeneration
     /** @param array<array-key, mixed> $payload */
     private static function assertEnvelope(array $payload): void
     {
-        $keys = array_keys($payload);
-        $expected = self::FIELDS;
-        sort($keys);
-        sort($expected);
-
-        if ($keys !== $expected || ($payload['object'] ?? null) !== 'generation') {
+        if (! self::hasExactKeys($payload, self::FIELDS) || ($payload['object'] ?? null) !== 'generation') {
             self::invalid('object');
         }
     }
@@ -203,12 +187,7 @@ final readonly class ProviderGeneration
         }
 
         $categories = [...PixelforgePricing::TOKEN_TYPES, 'total_tokens'];
-        $keys = array_keys($value);
-        $sortedCategories = $categories;
-        sort($keys);
-        sort($sortedCategories);
-
-        if ($keys !== $sortedCategories) {
+        if (! self::hasExactKeys($value, $categories)) {
             self::invalid('usage');
         }
 
@@ -222,8 +201,6 @@ final readonly class ProviderGeneration
         }
 
         try {
-            // Reuses the pure calculator for the component sum, exact
-            // nanodollar precision and the four accepted rate categories.
             (new GenerationPricing)->providerCost($usage, $rates);
         } catch (PricingException) {
             self::invalid('usage');
@@ -286,9 +263,7 @@ final readonly class ProviderGeneration
             self::invalid('error');
         }
 
-        $keys = array_keys($value);
-        sort($keys);
-        if ($keys !== ['code', 'message']) {
+        if (! self::hasExactKeys($value, ['code', 'message'])) {
             self::invalid('error');
         }
 
@@ -382,39 +357,43 @@ final readonly class ProviderGeneration
         ?CarbonImmutable $startedAt,
         ?CarbonImmutable $completedAt,
     ): void {
-        $hasImage = $imageUrl !== null || $imageUrlExpiresAt !== null;
-
-        if ($status === ProviderGenerationStatus::Queued) {
-            if ($startedAt !== null || $completedAt !== null || $usage !== null || $hasImage || $error !== null) {
-                self::invalid('status');
-            }
-
-            return;
-        }
-
-        if ($status === ProviderGenerationStatus::Processing) {
-            if ($startedAt === null || $completedAt !== null || $usage !== null || $hasImage || $error !== null) {
-                self::invalid('status');
-            }
-
-            return;
-        }
-
-        if ($status === ProviderGenerationStatus::Succeeded) {
-            if ($startedAt === null || $completedAt === null
-                || $usage === null || $imageUrl === null || $imageUrlExpiresAt === null
-                || $error !== null) {
-                self::invalid('status');
-            }
-
-            return;
-        }
-
-        // Failed: the provider may not have started, but it must have
-        // completed without usage or an image.
-        if ($completedAt === null || $usage !== null || $hasImage || $error === null) {
+        $noImage = $imageUrl === null && $imageUrlExpiresAt === null;
+        $valid = match ($status) {
+            ProviderGenerationStatus::Queued => $startedAt === null && $completedAt === null && $usage === null && $noImage && $error === null,
+            ProviderGenerationStatus::Processing => $startedAt !== null && $completedAt === null && $usage === null && $noImage && $error === null,
+            ProviderGenerationStatus::Succeeded => $startedAt !== null && $completedAt !== null && $usage !== null
+                && $imageUrl !== null && $imageUrlExpiresAt !== null && $error === null,
+            ProviderGenerationStatus::Failed => $completedAt !== null && $usage === null && $noImage && $error !== null,
+        };
+        if (! $valid) {
             self::invalid('status');
         }
+    }
+
+    /**
+     * @template T of BackedEnum
+     *
+     * @param  class-string<T>  $enum
+     * @return T
+     */
+    private static function enum(string $enum, mixed $value, string $field): BackedEnum
+    {
+        $case = is_string($value) ? $enum::tryFrom($value) : null;
+
+        return $case ?? self::invalid($field);
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $value
+     * @param  list<string>  $keys
+     */
+    private static function hasExactKeys(array $value, array $keys): bool
+    {
+        $actual = array_keys($value);
+        sort($actual);
+        sort($keys);
+
+        return $actual === $keys;
     }
 
     private static function invalid(string $field): never

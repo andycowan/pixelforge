@@ -9,13 +9,6 @@ use Illuminate\Foundation\Queue\Queueable;
 use RuntimeException;
 use Throwable;
 
-/**
- * Publish committed generation-change intent as private invalidation updates.
- *
- * Payloads carry only identity and revision: browsers refetch the owner-scoped
- * page props, so duplicate or out-of-order delivery is harmless. Failures stay
- * unpublished for the scheduled recovery sweep.
- */
 final class PublishOutboxJob implements ShouldQueue
 {
     use Queueable;
@@ -30,7 +23,7 @@ final class PublishOutboxJob implements ShouldQueue
     {
         foreach (OutboxMessage::nextUnpublished(self::BATCH) as $message) {
             if ($message->user_id === null) {
-                $message->markPublished(); // No subscriber can exist for an ownerless record.
+                $message->markPublished();
 
                 continue;
             }
@@ -38,7 +31,6 @@ final class PublishOutboxJob implements ShouldQueue
                 $mercure->publish($mercure->topicFor($message->user_id), $message->payload);
             } catch (Throwable $exception) {
                 $message->recordPublicationFailure();
-                // The hub is likely unavailable; leave the rest for the recovery sweep.
                 report(new RuntimeException('Outbox publication failed for '.$message->id, previous: $exception));
 
                 return;

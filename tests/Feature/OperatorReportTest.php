@@ -43,7 +43,6 @@ final class OperatorReportTest extends TestCase
         $this->actingAs(User::factory()->create())->get(route('admin.report'))->assertForbidden();
         $this->actingAs($this->admin)->get(route('admin.report'))->assertOk()
             ->assertInertia(fn (Assert $page) => $page->component('admin/Report')
-                // Default: the last 30 days ending today (UTC), like Pixelforge's endpoint.
                 ->where('report.range', ['start_date' => '2026-10-14', 'end_date' => '2026-11-12'])
                 ->has('report.days', 30));
         Saloon::assertSent(fn (GetUsage $request, Response $response): bool => $response->getPendingRequest()->query()->all() === ['start_date' => '2026-10-14', 'end_date' => '2026-11-12']
@@ -59,7 +58,6 @@ final class OperatorReportTest extends TestCase
         $this->artisan('users:admin', ['email' => 'ops@example.com', '--revoke' => true])->assertSuccessful();
         $this->assertFalse($user->fresh()->is_admin);
         $this->artisan('users:admin', ['email' => 'nobody@example.com'])->assertFailed();
-        // Not mass assignable through ordinary user updates.
         $this->assertNotContains('is_admin', (new User)->getFillable());
     }
 
@@ -73,7 +71,7 @@ final class OperatorReportTest extends TestCase
         $this->charge($alice, '2026-11-11 00:00:00', 281_927_500, [12, 0, 6450, 1592]);
         $this->charge($gone, '2026-11-11 09:00:00', 63_935_000, [7, 0, 1100, 1592]);
         $this->charge($bob, '2026-11-10 10:00:00', 50_000_000, [1, 0, 1, 1], key: 'another-key');
-        DB::table('generations')->where('user_id', $gone->id)->update(['user_id' => null]); // operator deletion keeps evidence
+        DB::table('generations')->where('user_id', $gone->id)->update(['user_id' => null]);
         Saloon::fake([GetUsage::class => $this->usage('2026-11-09', '2026-11-11', [
             '2026-11-10' => [2, 25, 0, 6730, 4978, '0.364912500'],
             '2026-11-11' => [2, 19, 0, 7550, 3184, '0.345862500'],
@@ -83,7 +81,6 @@ final class OperatorReportTest extends TestCase
             ->has('report.days', 3)
             ->where('report.days.0', fn ($day) => $day['date'] === '2026-11-09' && $day['generations'] === 0 && $day['credit_spend_usd'] === '0.000000000' && $day['users'] === [] && $day['pixelforge']['status'] === 'match')
             ->where('report.days.1.generations', 2)
-            // $0.44 + $0.03 charged; 0.3476475 + 0.017265 provider.
             ->where('report.days.1.credit_spend_usd', '0.470000000')
             ->where('report.days.1.provider_cost_usd', '0.364912500')
             ->where('report.days.1.profit_usd', '0.105087500')
@@ -118,11 +115,9 @@ final class OperatorReportTest extends TestCase
         $entry(['user_id' => $bob->id, 'type' => 'purchase', 'amount_nanodollars' => 5_000_000_000, 'idempotency_key' => (string) Str::uuid()]);
         $entry(['user_id' => $bob->id, 'type' => 'hold', 'amount_nanodollars' => 460_000_000, 'generation_id' => $running->id]);
         $entry(['user_id' => $bob->id, 'type' => 'debit_adjustment', 'amount_nanodollars' => 1_000_000_000, 'reason' => 'Correction']);
-        // Credit left behind by a deleted user is still unspent.
         $entry(['user_id' => null, 'type' => 'purchase', 'amount_nanodollars' => 2_000_000_000, 'idempotency_key' => (string) Str::uuid()]);
         Saloon::fake([GetUsage::class => $this->usage('2026-11-11', '2026-11-11', [])]);
 
-        // Available 9.56 + 3.54 + 2.00 = 15.10, plus 0.46 held for Bob's running generation.
         $this->report('2026-11-11', '2026-11-11')->assertInertia(fn (Assert $page) => $page
             ->where('report.bank', ['unspent_usd' => '15.560000000', 'held_usd' => '0.460000000']));
         $perUser = array_sum(array_map(fn (User $user): int => CreditLedgerEntry::availableFor($user) + CreditLedgerEntry::heldFor($user), [$alice, $bob, $this->admin]));
@@ -143,7 +138,6 @@ final class OperatorReportTest extends TestCase
             ->where('report.days.0.pixelforge.mismatches', ['generations', 'cost', 'reasoning_tokens'])
             ->where('report.days.0.pixelforge.cost_difference_usd', '-0.000000001')
             ->where('report.days.0.pixelforge.generations_difference', -1)
-            // Our own figures are unchanged.
             ->where('report.days.0.provider_cost_usd', '0.017265000'));
     }
 
@@ -219,12 +213,11 @@ final class OperatorReportTest extends TestCase
         return $this->actingAs($this->admin)->get(route('admin.report', ['start_date' => $start, 'end_date' => $end]))->assertOk();
     }
 
-    /** @param array{int, int, int, int} $tokens text, image, output, reasoning */
+    /** @param array{int, int, int, int} $tokens */
     private function charge(User $user, string $completedAt, int $provider, array $tokens, string $key = self::KEY): void
     {
         $generation = Generation::factory()->for($user)->create();
         $usage = array_combine(['input_text_tokens', 'input_image_tokens', 'output_tokens', 'reasoning_tokens'], $tokens);
-        // Fixture only: settled evidence is normally written by the settlement workflow.
         DB::table('generations')->where('id', $generation->id)->update([
             'submission_status' => 'accepted', 'provider_id' => 'gen_'.$generation->id, 'provider_status' => 'succeeded',
             'provider_key_fingerprint' => hash('sha256', $key), 'rates_snapshot' => json_encode(['input_text_tokens' => '5.00']),
@@ -238,7 +231,7 @@ final class OperatorReportTest extends TestCase
         ]);
     }
 
-    /** @param array<string, array{int, int, int, int, int, string}> $days date => [generations, text, image, output, reasoning, cost] */
+    /** @param array<string, array{int, int, int, int, int, string}> $days */
     private function usage(string $start, string $end, array $days): MockResponse
     {
         $data = [];

@@ -1,9 +1,3 @@
-/**
- * Pure helpers for the real generation workflow.
- *
- * Everything here is presentation or identity logic. No function computes a
- * price, a charge or a total: the server owns money.
- */
 import type {
     ActualCostState,
     GenerationHistoryItem,
@@ -19,11 +13,6 @@ const FIELD_ERROR_KEYS = new Set([
     'reference_images',
 ]);
 
-/**
- * Identity of the exact submitted options. A submission token is reused only
- * while this key is unchanged, so changing an option always starts a new
- * request while an unchanged retry stays idempotent.
- */
 export function generationOptionsKey(request: QuoteRequest): string {
     return JSON.stringify([
         request.prompt,
@@ -46,7 +35,6 @@ export function buildGenerationPayload(
     };
 }
 
-/** RFC 4122 version 4 UUID, with a fallback for browsers without randomUUID. */
 export function createSubmissionToken(): string {
     const crypto = globalThis.crypto;
 
@@ -66,11 +54,6 @@ export function createSubmissionToken(): string {
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-/**
- * Local submission state and provider state are different facts. Describe
- * both without pretending a provider accepted, finished or charged anything
- * that has not been recorded.
- */
 export function describeGenerationState(
     item: GenerationHistoryItem,
 ): GenerationState {
@@ -146,10 +129,6 @@ export function describeGenerationState(
     };
 }
 
-/**
- * An unknown settled amount stays pending; a known zero is only shown for a
- * failure or rejection, never as if a successful generation cost nothing.
- */
 export function describeActualCost(
     item: GenerationHistoryItem,
 ): ActualCostState {
@@ -179,10 +158,6 @@ export function describeActualCost(
     };
 }
 
-/**
- * Provider result links expire 24 hours after completion. Once expired we show
- * a placeholder instead of fetching a new URL that would extend the lifetime.
- */
 export function isResultImageExpired(
     expiresAt: string | null,
     now: number = Date.now(),
@@ -203,7 +178,6 @@ const PAGINATION_ENTITIES: Record<string, string> = {
     '&amp;': '&',
 };
 
-/** Laravel paginator labels are HTML-escaped prose; render them as text. */
 export function decodePaginationLabel(label: string): string {
     return label
         .replace(
@@ -213,10 +187,6 @@ export function decodePaginationLabel(label: string): string {
         .trim();
 }
 
-/**
- * Field errors stay with their controls; anything else (for example a
- * conflicting submission token or insufficient credits) is a form-level message.
- */
 export function readSubmissionError(
     errors: Record<string, unknown>,
 ): string | null {
@@ -237,7 +207,6 @@ export function readSubmissionError(
     return messages.length === 0 ? null : messages.join(' ');
 }
 
-/** Friendliest available message for a non-validation HTTP failure. */
 export function submissionHttpExceptionMessage(status: number): string {
     if (status === 419 || status === 401) {
         return 'Your session expired. Sign in again in another tab; your prompt stays here. Retry unchanged options to reuse the same request.';
@@ -251,6 +220,5 @@ export function submissionHttpExceptionMessage(status: number): string {
         return 'Image generation is currently unavailable and the request was not confirmed. Retry unchanged options to reuse the same request.';
     }
 
-    // An HTTP error can happen after the server committed the request.
     return 'The server could not confirm the request. Check Generations or retry unchanged options before starting another request.';
 }

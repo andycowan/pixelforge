@@ -35,14 +35,10 @@ const model = defineModel<QuoteFormInput>({ required: true });
 
 const props = defineProps<{
     errors: QuoteFieldErrors;
-    /** Server field messages, which are shown even before a field is blurred. */
     serverFieldErrors: QuoteFieldErrors;
-    /** The server re-quotes and validates again, so this is only an affordance. */
     canGenerate: boolean;
     submitting: boolean;
-    /** Why Generate is unavailable right now; null when it is available. */
     generateHint: string | null;
-    /** Form-level failure from the last generation request. */
     generateError: string | null;
     availableUsd: string | null;
     needsCredits: boolean;
@@ -96,7 +92,6 @@ const promptCountClass = computed(() =>
         : 'text-muted-foreground',
 );
 
-// Reference URLs are validated on blur so a half-typed URL is not shouted at.
 const referencesTouched = ref(false);
 const referenceError = computed(() =>
     referencesTouched.value ||

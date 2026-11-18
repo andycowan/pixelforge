@@ -46,11 +46,7 @@ final class WebhookEvent extends Model
         throw new LogicException('Webhook evidence is retained.');
     }
 
-    /**
-     * Caller must hold this row's lock; never acquire it before the generation lock.
-     *
-     * @param  array<string, mixed>|null  $diagnostic
-     */
+    /** @param  array<string, mixed>|null  $diagnostic */
     public function markProcessed(string $outcome, ?array $diagnostic = null): void
     {
         if (! $this->exists || $this->isDirty() || DB::transactionLevel() === 0 || ! in_array($outcome, ['advance', 'duplicate', 'stale', 'conflict', 'ignored', 'unmatched', 'invalid'], true)) {

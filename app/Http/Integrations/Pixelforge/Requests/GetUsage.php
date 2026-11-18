@@ -10,7 +10,6 @@ use Saloon\Http\Request;
 use Saloon\Http\Response;
 use Throwable;
 
-/** What Pixelforge billed the calling API key, per UTC day (inclusive range). */
 final class GetUsage extends Request
 {
     protected Method $method = Method::GET;

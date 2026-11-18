@@ -33,12 +33,6 @@ use Saloon\Laravel\Facades\Saloon;
 use Tests\Support\GenerationWorkflowFixture;
 use Tests\TestCase;
 
-/**
- * Credit ledger behaviour through the real request, submission, webhook and
- * purchase paths. "A lighthouse" at medium/square quotes $0.08 estimate and a
- * $0.09 maximum; the standard succeeded usage settles at $0.08 (see
- * GenerationFactory for the arithmetic).
- */
 final class CreditBalanceTest extends TestCase
 {
     use GenerationWorkflowFixture, RefreshDatabase;
@@ -115,8 +109,6 @@ final class CreditBalanceTest extends TestCase
         $user = $this->userWithCredit(self::MAXIMUM);
         $payload = $this->generationPayload();
 
-        // The retry arrives after the first hold consumed all credit; it must
-        // be answered from the durable row, not rejected as unaffordable.
         $this->requestGeneration($user, $payload)->assertRedirect(route('generations.index'));
         $this->requestGeneration($user, $payload)->assertRedirect(route('generations.index'));
 
@@ -132,8 +124,6 @@ final class CreditBalanceTest extends TestCase
         Saloon::fake([CreateGeneration::class => MockResponse::make($succeeded, 202)]);
 
         $this->submit($generation);
-        // Duplicate and late deliveries: two distinct completion events, each
-        // processed twice, a stale processing event and a reconciliation read.
         foreach (['evt_done1', 'evt_done2'] as $id) {
             $this->receive($this->eventPayload($succeeded, $id))->assertNoContent();
             $this->processEvent($id);
@@ -156,7 +146,6 @@ final class CreditBalanceTest extends TestCase
         Saloon::fake([CreateGeneration::class => MockResponse::make($this->providerPayload($generation, 'queued'), 202)]);
         $this->submit($generation);
 
-        // Completion overtakes processing; the late processing event is stale.
         foreach (['succeeded', 'processing', 'queued'] as $status) {
             $this->receive($this->eventPayload($this->providerPayload($generation, $status), 'evt_'.$status))->assertNoContent();
             $this->processEvent('evt_'.$status);
@@ -204,7 +193,6 @@ final class CreditBalanceTest extends TestCase
         $generation = $this->requestedGeneration($user);
         Saloon::fake([
             MockResponse::make()->throw(fn (PendingRequest $pending) => new FatalRequestException(new \RuntimeException('simulated timeout'), $pending)),
-            // A known no-create code cannot disprove an earlier uncertain attempt: paused, not failed.
             MockResponse::make(['error' => ['code' => 'content_policy_violation']], 400),
         ]);
 
@@ -220,7 +208,6 @@ final class CreditBalanceTest extends TestCase
         $this->assertLedger($generation, hold: self::MAXIMUM);
         $this->assertSame(1_000_000_000 - self::MAXIMUM, CreditLedgerEntry::availableFor($user));
 
-        // The provider later proves it accepted the work: settle normally.
         $this->receive($this->eventPayload($this->providerPayload($generation, 'succeeded'), 'evt_found'))->assertNoContent();
         $this->processEvent('evt_found');
         $this->assertLedger($generation, hold: self::MAXIMUM, release: self::MAXIMUM, debit: self::CHARGE);
@@ -228,11 +215,8 @@ final class CreditBalanceTest extends TestCase
 
     public function test_an_actual_charge_above_the_hold_is_debited_in_full_and_blocks_new_requests(): void
     {
-        // Exactly one request's worth of credit.
         $user = $this->userWithCredit(self::MAXIMUM);
         $generation = $this->requestedGeneration($user);
-        // Provider output rates doubled between quote and acceptance:
-        // (15,000 + 88,000,000 + 13,750,000) x 5/4 = 127,206,250 -> $0.13.
         $rates = ['input_text_tokens' => '5.00', 'input_image_tokens' => '10.00', 'output_tokens' => '80.00', 'reasoning_tokens' => '12.50'];
         Saloon::fake([CreateGeneration::class => MockResponse::make($this->providerPayload($generation, 'succeeded', ['rates' => $rates]), 202)]);
 
@@ -351,7 +335,6 @@ final class CreditBalanceTest extends TestCase
         $other = User::factory()->create();
         $token = (string) Str::uuid();
 
-        // The same client token belongs to each user separately.
         $this->actingAs($owner)->post(route('credits.purchases.store'), ['package' => 'usd_5', 'idempotency_token' => $token]);
         $this->actingAs($other)->post(route('credits.purchases.store'), ['package' => 'usd_25', 'idempotency_token' => $token]);
 
@@ -380,8 +363,6 @@ final class CreditBalanceTest extends TestCase
         $this->submit($failed);
         $inProgress = $this->requestedGeneration($user);
 
-        // The ledger keeps every entry; only the activity view nets released holds away.
-        // purchase + (hold, release, debit) + (hold, release) + hold
         $this->assertSame(7, CreditLedgerEntry::query()->where('user_id', $user->id)->count());
         $this->actingAs($user)->get(route('credits.index'))->assertOk()->assertInertia(fn (Assert $page) => $page
             ->has('entries', 3)
@@ -413,7 +394,6 @@ final class CreditBalanceTest extends TestCase
 
         $this->artisan('credits:adjust', ['email' => $user->email, '--to' => '0.40', '--reason' => 'Testing a low balance'])
             ->expectsOutput('Available balance $2.67 -> $0.40 (debit_adjustment $2.27).')->assertSuccessful();
-        // Repeating the same target records nothing, so a rerun can't adjust twice.
         $this->artisan('credits:adjust', ['email' => $user->email, '--to' => '0.40', '--reason' => 'Testing a low balance'])
             ->expectsOutput('Available balance is already $0.40; nothing recorded.')->assertSuccessful();
         $this->artisan('credits:adjust', ['email' => $user->email, '--to' => '5', '--reason' => 'Goodwill credit'])
@@ -439,7 +419,6 @@ final class CreditBalanceTest extends TestCase
             'negative target' => [['--to' => '-1', '--reason' => 'x']],
             'sub-cent target' => [['--to' => '0.405', '--reason' => 'x']],
             'not a number' => [['--to' => 'lots', '--reason' => 'x']],
-            // From $10.00, a $1,011 target is a $1,001 change: over the $1,000 limit.
             'above the adjustment limit' => [['--to' => '1011', '--reason' => 'x']],
             'unknown user' => [['email' => 'nobody@example.invalid', '--to' => '0.40', '--reason' => 'x']],
         ];
@@ -587,7 +566,6 @@ final class CreditBalanceTest extends TestCase
     private function assertDatabaseRejects(callable $statement, string $case = 'statement'): void
     {
         try {
-            // A savepoint keeps the surrounding test transaction usable.
             DB::transaction(fn () => $statement());
             $this->fail("The database accepted {$case}.");
         } catch (QueryException) {

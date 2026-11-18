@@ -4,7 +4,6 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-/** Operators who may see the admin report (D-060). Everyone else defaults to false. */
 return new class extends Migration
 {
     public function up(): void

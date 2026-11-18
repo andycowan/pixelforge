@@ -13,9 +13,6 @@ use Laravel\Fortify\Features;
 
 class SecurityController extends Controller
 {
-    /**
-     * Show the user's security settings page.
-     */
     public function edit(TwoFactorAuthenticationRequest $request): Response
     {
         $props = [
@@ -56,9 +53,6 @@ class SecurityController extends Controller
         return Inertia::render('settings/Security', $props);
     }
 
-    /**
-     * Update the user's password.
-     */
     public function update(PasswordUpdateRequest $request): RedirectResponse
     {
         $request->user()->update([

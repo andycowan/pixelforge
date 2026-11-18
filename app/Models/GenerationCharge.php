@@ -26,6 +26,8 @@ use LogicException;
  */
 final class GenerationCharge extends Model
 {
+    private const POLICY = ['markup_numerator' => 5, 'markup_denominator' => 4, 'rounding' => 'ceiling', 'scale' => 2];
+
     protected $primaryKey = 'generation_id';
 
     public $incrementing = false;
@@ -66,12 +68,14 @@ final class GenerationCharge extends Model
             throw new LogicException('Settlement requires locked successful provider evidence in a transaction.');
         }
         $providerCost = $pricing->providerCost($generation->usage, $generation->rates_snapshot);
-        $customerCost = $pricing->customerCost($providerCost);
+        $settlement = [
+            ...self::POLICY,
+            'provider_cost_nanodollars' => $providerCost,
+            'customer_cost_nanodollars' => $pricing->customerCost($providerCost),
+        ];
         $existing = self::query()->find($generation->id);
         if ($existing !== null) {
-            if ($existing->provider_cost_nanodollars !== $providerCost || $existing->customer_cost_nanodollars !== $customerCost
-                || $existing->markup_numerator !== 5 || $existing->markup_denominator !== 4
-                || $existing->rounding !== 'ceiling' || $existing->scale !== 2
+            if ($existing->only(array_keys($settlement)) !== $settlement
                 || ! $existing->provider_completed_at->equalTo($generation->provider_completed_at)) {
                 throw new ProviderEvidenceConflict('Existing settlement does not agree with provider evidence.');
             }
@@ -81,15 +85,12 @@ final class GenerationCharge extends Model
         $charge = new self;
         $charge->settling = true;
         try {
-            $charge->generation_id = $generation->id;
-            $charge->provider_cost_nanodollars = $providerCost;
-            $charge->customer_cost_nanodollars = $customerCost;
-            $charge->markup_numerator = 5;
-            $charge->markup_denominator = 4;
-            $charge->rounding = 'ceiling';
-            $charge->scale = 2;
-            $charge->provider_completed_at = $generation->provider_completed_at;
-            $charge->created_at = now();
+            $charge->forceFill([
+                ...$settlement,
+                'generation_id' => $generation->id,
+                'provider_completed_at' => $generation->provider_completed_at,
+                'created_at' => now(),
+            ]);
             if (! $charge->saveOrFail()) {
                 throw new LogicException('Generation settlement was not persisted.');
             }
@@ -115,12 +116,7 @@ final class GenerationCharge extends Model
         throw new LogicException('Generation charges are retained as immutable evidence.');
     }
 
-    /**
-     * Settled totals per provider-completion UTC day and owner, for one API key
-     * (D-060). Pixelforge bills by the same completion day and key.
-     *
-     * @return list<array{date: string, user_id: int|null, generations: int, customer: int, provider: int, input_text_tokens: int, input_image_tokens: int, output_tokens: int, reasoning_tokens: int}>
-     */
+    /** @return list<array{date: string, user_id: int|null, generations: int, customer: int, provider: int, input_text_tokens: int, input_image_tokens: int, output_tokens: int, reasoning_tokens: int}> */
     public static function dailyTotalsByUser(CarbonImmutable $start, CarbonImmutable $end, string $keyFingerprint): array
     {
         $tokens = implode(', ', array_map(fn (string $type): string => "sum((g.usage->>'{$type}')::bigint) AS {$type}", PixelforgePricing::TOKEN_TYPES));
@@ -145,7 +141,6 @@ final class GenerationCharge extends Model
             ])->all());
     }
 
-    /** Charges in the range made with a different API key: disclosed, never mixed into a key's figures. */
     public static function otherKeyCountBetween(CarbonImmutable $start, CarbonImmutable $end, ?string $keyFingerprint): int
     {
         return self::query()->join('generations', 'generations.id', '=', 'generation_charges.generation_id')
@@ -157,6 +152,6 @@ final class GenerationCharge extends Model
 
     public function customerCostUsd(): string
     {
-        return sprintf('%d.%09d', intdiv($this->customer_cost_nanodollars, 1_000_000_000), $this->customer_cost_nanodollars % 1_000_000_000);
+        return GenerationPricing::formatUsd($this->customer_cost_nanodollars);
     }
 }

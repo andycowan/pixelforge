@@ -12,19 +12,11 @@ use function Laravel\Prompts\spin;
 
 class InstallFeaturesCommand extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
+    /** @var string */
     protected $signature = 'install:features
         {--answers= : JSON string of answers to skip interactive prompts}';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    /** @var string */
     protected $description = 'Choose which starter kit features to keep';
 
     public function handle(): int

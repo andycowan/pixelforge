@@ -5,7 +5,6 @@ use App\Http\Integrations\Pixelforge\Data\ProviderGeneration;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
 
-// A real independent application process, never a nested PHPUnit/TestCase run.
 require __DIR__.'/../bootstrap.php';
 
 $app = require __DIR__.'/../../bootstrap/app.php';
@@ -24,7 +23,6 @@ try {
     $outcome = $app->make(ApplyProviderGeneration::class)->execute($input['id'], $provider, $input['fingerprint']);
     echo strtolower($outcome->name)."\n";
 } catch (Throwable $exception) {
-    // Do not emit connection strings or provider payloads from child failures.
     fwrite(STDERR, 'Concurrency worker failed: '.$exception::class."\n");
     exit(1);
 }

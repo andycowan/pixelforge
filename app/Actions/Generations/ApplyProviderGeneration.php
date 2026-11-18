@@ -26,8 +26,7 @@ final class ApplyProviderGeneration
         $notify = false;
         try {
             $outcome = DB::transaction(function () use ($generationId, $provider, $keyFingerprint, $webhookEventId, &$notify): ProviderTransitionOutcome {
-                $notify = false; // A retried attempt starts again.
-                // Every ingress locks in this order; never inbox then generation.
+                $notify = false;
                 $generation = Generation::query()->lockForUpdate()->findOrFail($generationId);
                 if (($provider->metadata['generation_id'] ?? null) !== $generationId
                     || ($provider->metadata['key_fingerprint'] ?? null) !== $keyFingerprint
@@ -53,10 +52,6 @@ final class ApplyProviderGeneration
 
                     return $outcome;
                 }
-                // Duplicate terminal observations still validate/repair a missing
-                // settlement; ledger effects are keyed per generation, so repeats are no-ops.
-                // Lock order: generation row, then the ledger insert's implicit owner key-share
-                // lock. Settlement never takes the owner FOR UPDATE lock (D-B05).
                 if ($generation->provider_status === ProviderGenerationStatus::Succeeded
                     && $provider->status === ProviderGenerationStatus::Succeeded) {
                     CreditLedgerEntry::settle($generation, GenerationCharge::ensureFor($generation, $this->pricing));
@@ -73,8 +68,6 @@ final class ApplyProviderGeneration
                 return $outcome;
             }, 3);
         } catch (QueryException $exception) {
-            // Different local rows cannot share a provider identity, even if
-            // both transactions raced past the model's correlation check.
             if ((string) $exception->getCode() === '23505' && str_contains($exception->getMessage(), 'generations_provider_id_unique')) {
                 throw new ProviderEvidenceConflict('Provider identity is already bound to another generation.');
             }
@@ -82,7 +75,6 @@ final class ApplyProviderGeneration
             throw $exception;
         }
         if ($notify) {
-            // Intent is durable; a failed dispatch is repaired by the recovery sweep.
             rescue(fn () => PublishOutboxJob::dispatch());
         }
 

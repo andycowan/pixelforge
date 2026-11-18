@@ -3,13 +3,6 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
-/**
- * Customer prices round up once to whole cents (D-054).
- *
- * Existing records are recomputed deterministically from their stored provider
- * cost or quote snapshot, so both directions are exact and repeatable. Provider
- * costs are never changed. On an empty database this only replaces constraints.
- */
 return new class extends Migration
 {
     private const TYPES = ['input_text_tokens', 'input_image_tokens', 'output_tokens', 'reasoning_tokens'];
@@ -46,7 +39,6 @@ return new class extends Migration
         });
     }
 
-    /** Exact provider nanodollars from a snapshot token map and its per-million USD rates; NULL (and so a failed update) if any input is missing. */
     private static function providerCost(string $tokens): string
     {
         $terms = array_map(

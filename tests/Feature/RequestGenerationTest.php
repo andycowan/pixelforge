@@ -39,15 +39,12 @@ final class RequestGenerationTest extends TestCase
         config(['services.pixelforge.api_key' => self::API_KEY]);
         config(['cache.default' => 'array']);
 
-        // Submission is queued work. faking the queue keeps the job from
-        // contacting a provider inside the HTTP request under test.
         Queue::fake();
 
         Saloon::fake([
             GetPricing::class => $this->pricingResponse(),
         ]);
 
-        // Credit is not under test here; CreditBalanceTest covers affordability.
         $this->user = User::factory()->withCredit(10_000_000_000)->create();
     }
 
@@ -62,7 +59,6 @@ final class RequestGenerationTest extends TestCase
 
     public function test_quote_previews_do_not_consume_the_submission_rate_limit(): void
     {
-        // Live previews fire on every debounced edit; they must not lock out Generate.
         for ($request = 1; $request <= 11; $request++) {
             $this->actingAs($this->user)
                 ->postJson(route('generations.quote'), ['prompt' => 'A lighthouse', 'size' => '1024x1024', 'quality' => 'medium'])
@@ -86,9 +82,7 @@ final class RequestGenerationTest extends TestCase
         Saloon::assertNothingSent();
     }
 
-    /**
-     * @param  array<string, mixed>  $overrides
-     */
+    /** @param  array<string, mixed>  $overrides */
     #[DataProvider('invalidPayloads')]
     public function test_quote_rules_are_reused_and_the_submission_token_is_required(
         array $overrides,
@@ -103,17 +97,13 @@ final class RequestGenerationTest extends TestCase
         Saloon::assertNothingSent();
     }
 
-    /**
-     * @return array<string, array{array<string, mixed>, string}>
-     */
+    /** @return array<string, array{array<string, mixed>, string}> */
     public static function invalidPayloads(): array
     {
         return [
             'missing token' => [['submission_token' => null], 'submission_token'],
             'token is not a uuid' => [['submission_token' => 'not-a-uuid'], 'submission_token'],
             'blank prompt' => [['prompt' => "   \n  "], 'prompt'],
-            // Laravel trims a trailing NUL like other whitespace; an interior
-            // NUL is still unsupported and must fail as a prompt error.
             'prompt contains a NUL byte' => [['prompt' => "A light\0house"], 'prompt'],
             'prompt too long' => [['prompt' => str_repeat('é', 4001)], 'prompt'],
             'unsupported size' => [['size' => '2048x2048'], 'size'],
@@ -136,7 +126,6 @@ final class RequestGenerationTest extends TestCase
         $other = User::factory()->create();
         $payload = $this->payload([
             'reference_images' => ['https://example.com/first.png', 'https://example.com/first.png'],
-            // Client-supplied money, ownership and quotes have no rules and are ignored.
             'user_id' => $other->id,
             'estimated_cost_nanodollars' => 1,
             'estimated_cost_usd' => '0.000000001',
@@ -155,23 +144,17 @@ final class RequestGenerationTest extends TestCase
         $this->assertSame('1024x1024', $generation->size->value);
         $this->assertSame('medium', $generation->quality->value);
 
-        // Reference order and duplicates are preserved: they affect billing.
         $this->assertSame(
             ['https://example.com/first.png', 'https://example.com/first.png'],
             $generation->reference_images,
         );
 
-        // The server's quote wins, not the browser's numbers. Two reference
-        // images add 2 x 765 image tokens at $10/million:
-        // estimate (57,765,000 + 15,300,000) x 5/4 = 91,331,250 -> $0.10
-        // maximum  (69,020,000 + 15,300,000) x 5/4 = 105,400,000 -> $0.11
         $this->assertSame(100_000_000, $generation->estimated_cost_nanodollars);
         $this->assertSame(110_000_000, $generation->maximum_cost_nanodollars);
         $this->assertNotSame(['input_text_tokens' => '0.0001'], $generation->quote_snapshot['rates']);
         $this->assertArrayHasKey('rates', $generation->quote_snapshot);
         $this->assertArrayHasKey('tokens', $generation->quote_snapshot);
 
-        // New requests are pending and unobserved, with a frozen key identity.
         $this->assertSame('pending', $generation->submission_status->value);
         $this->assertSame(0, $generation->submission_attempts);
         $this->assertNull($generation->provider_id);
@@ -226,7 +209,6 @@ final class RequestGenerationTest extends TestCase
         $this->assertSame(hash('sha256', self::API_KEY), $generation->provider_key_fingerprint);
         $this->assertSame(80_000_000, $generation->estimated_cost_nanodollars);
 
-        // The failure is reported for operators; scheduled recovery rescues the row.
         Log::shouldHaveReceived('error')->atLeast()->once();
     }
 
@@ -241,7 +223,6 @@ final class RequestGenerationTest extends TestCase
 
         $original = Generation::query()->sole();
 
-        // Prices have moved since the first submission.
         Saloon::fake([
             GetPricing::class => $this->pricingResponse([
                 'rates' => [
@@ -265,8 +246,6 @@ final class RequestGenerationTest extends TestCase
         $this->assertSame($original->estimated_cost_nanodollars, $repeated->estimated_cost_nanodollars);
         $this->assertSame($original->quote_snapshot, $repeated->quote_snapshot);
 
-        // The duplicate is answered before any re-quote: only the original
-        // submission fetched pricing at all.
         Saloon::assertSentCount(1);
         Queue::assertPushed(SubmitGenerationJob::class, 1);
     }
@@ -319,7 +298,6 @@ final class RequestGenerationTest extends TestCase
             ->post(route('generations.store'), $this->payload())
             ->assertRedirect(route('generations.index'));
 
-        // Only the public pricing catalogue is fetched; submission is queued work.
         Saloon::assertSentCount(1);
         Saloon::assertSent(GetPricing::class);
         Saloon::assertNotSent(CreateGeneration::class);
@@ -337,7 +315,6 @@ final class RequestGenerationTest extends TestCase
             'message',
             'Image generation is currently unavailable. Nothing was created or charged.',
         );
-        // The generic failure never echoes the configured key or its env name.
         $this->assertStringNotContainsString('PIXELFORGE_API_KEY', $response->getContent());
         $this->assertStringNotContainsString(self::API_KEY, $response->getContent());
 
@@ -407,7 +384,6 @@ final class RequestGenerationTest extends TestCase
         $rejected = false;
 
         try {
-            // A savepoint keeps the surrounding test transaction usable.
             DB::transaction(function () use ($token): void {
                 Generation::factory()->create(['user_id' => $this->user->id, 'submission_token' => $token]);
             });
@@ -455,9 +431,7 @@ final class RequestGenerationTest extends TestCase
         ], $overrides);
     }
 
-    /**
-     * @param  array<string, mixed>  $overrides
-     */
+    /** @param  array<string, mixed>  $overrides */
     private function pricingResponse(array $overrides = []): MockResponse
     {
         $payload = array_replace_recursive($this->pricingPayload(), $overrides);
@@ -469,9 +443,7 @@ final class RequestGenerationTest extends TestCase
         );
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     private function pricingPayload(): array
     {
         $decoded = json_decode(

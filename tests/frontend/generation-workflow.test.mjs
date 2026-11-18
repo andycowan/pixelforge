@@ -1,12 +1,3 @@
-// Frontend logic tests for the real generation workflow.
-//
-// Run with Node's built-in runner; no test framework or extra dependency is
-// installed in this project:
-//
-//     node --test tests/frontend/generation-workflow.test.mjs
-//
-// These cover the pure identity, wording and display helpers. Component
-// rendering, Inertia submission and image loading are verified in the browser.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -65,7 +56,6 @@ void test('the options key is stable for identical options and changes with any 
         generationOptionsKey({ ...OPTIONS, quality: 'high' }),
     );
 
-    // Reference order and duplicates are part of the request.
     assert.notEqual(
         base,
         generationOptionsKey({

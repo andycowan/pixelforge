@@ -7,20 +7,12 @@ use Saloon\Enums\Method;
 use Saloon\Http\Request;
 use Saloon\Traits\Plugins\HasTimeout;
 
-/**
- * Fetch a generated image from its signed provider URL.
- *
- * Only URLs on the configured provider's own scheme and host are accepted, so
- * stored provider evidence can never make the server fetch an arbitrary URL.
- * The URL is already signed; callers use an anonymous connector (no API key).
- */
 final class GetGenerationImage extends Request
 {
     use HasTimeout;
 
     protected Method $method = Method::GET;
 
-    /** Safe only because the constructor pins the URL to the provider's own host (Saloon v4 blocks absolute endpoints by default). */
     public ?bool $allowBaseUrlOverride = true;
 
     protected float $connectTimeout = 3.0;
@@ -40,7 +32,6 @@ final class GetGenerationImage extends Request
         }
     }
 
-    /** A fully qualified endpoint overrides the connector's API base URL. */
     public function resolveEndpoint(): string
     {
         return $this->imageUrl;

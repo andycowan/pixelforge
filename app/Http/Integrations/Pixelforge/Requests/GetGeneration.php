@@ -2,19 +2,12 @@
 
 namespace App\Http\Integrations\Pixelforge\Requests;
 
-use App\Exceptions\ProviderPayloadException;
 use App\Http\Integrations\Pixelforge\Data\ProviderGeneration;
 use InvalidArgumentException;
 use Saloon\Enums\Method;
 use Saloon\Http\Request;
 use Saloon\Http\Response;
-use Throwable;
 
-/**
- * Retrieve one provider generation for reconciliation.
- *
- * A single attempt: scheduling and retry limits belong to the caller.
- */
 final class GetGeneration extends Request
 {
     protected Method $method = Method::GET;
@@ -33,17 +26,6 @@ final class GetGeneration extends Request
 
     public function createDtoFromResponse(Response $response): ProviderGeneration
     {
-        try {
-            /** @var mixed $payload */
-            $payload = $response->json();
-        } catch (Throwable $exception) {
-            throw new ProviderPayloadException('Invalid Pixelforge generation response.', previous: $exception);
-        }
-
-        if (! is_array($payload)) {
-            throw new ProviderPayloadException('Invalid Pixelforge generation response.');
-        }
-
-        return ProviderGeneration::fromArray($payload);
+        return ProviderGeneration::fromResponse($response);
     }
 }

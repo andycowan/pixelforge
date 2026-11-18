@@ -5,7 +5,6 @@
 :80 {
 	root * /app/public
 
-	# Compressed SSE streams cost memory per subscriber and enable BREACH-style attacks.
 	@compressible not path /.well-known/mercure*
 	encode @compressible zstd gzip
 
@@ -18,9 +17,7 @@
 				jwt {env.MERCURE_SUBSCRIBER_JWT_KEY}
 			}
 		}
-		# TLS ends at Traefik, so pin the public audience instead of deriving it per request.
 		resource_identifier {$APP_URL}/.well-known/mercure
-		# Clients refetch authoritative props on every connect; replay history adds nothing.
 		transport local
 	}
 

@@ -9,21 +9,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
-/**
- * @extends Factory<User>
- */
+/** @extends Factory<User> */
 class UserFactory extends Factory
 {
-    /**
-     * The current password being used by the factory.
-     */
     protected static ?string $password;
 
-    /**
-     * Define the model's default state.
-     *
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     public function definition(): array
     {
         return [
@@ -40,9 +31,6 @@ class UserFactory extends Factory
         ];
     }
 
-    /**
-     * Indicate that the model's email address should be unverified.
-     */
     public function unverified(): static
     {
         return $this->state(fn (array $attributes) => [
@@ -50,9 +38,6 @@ class UserFactory extends Factory
         ]);
     }
 
-    /**
-     * Give the user demo credit through the real append-only ledger.
-     */
     public function withCredit(int $nanodollars): static
     {
         return $this->afterCreating(fn (User $user) => DB::transaction(
@@ -61,9 +46,6 @@ class UserFactory extends Factory
     }
 
     /* @chisel-2fa */
-    /**
-     * Indicate that the model has two-factor authentication configured.
-     */
     public function withTwoFactor(): static
     {
         return $this->state(fn (array $attributes) => [

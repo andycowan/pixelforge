@@ -69,12 +69,11 @@ function apply(): void {
     router.get(adminReport().url, { ...range }, { preserveScroll: true });
 }
 
-const days = computed(() => [...props.report.days].reverse()); // newest first
+const days = computed(() => [...props.report.days].reverse());
 const reconciliation = computed(() => props.report.reconciliation);
 
 const usd = (value: string): string => `$${formatUsdAmount(value)}`;
 
-/** Plain-language reason for a mismatch: ours minus Pixelforge's. */
 function describe(check: Check): string {
     const parts: string[] = [];
     if (check.mismatches.includes('cost')) {

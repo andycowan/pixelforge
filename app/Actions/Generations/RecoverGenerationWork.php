@@ -15,7 +15,6 @@ use Throwable;
 
 final class RecoverGenerationWork
 {
-    /** Redispatch at most twenty durable items, fairly across the three work types. */
     public function execute(): int
     {
         $inbox = WebhookEvent::query()->whereNull('processed_at')->orderBy('received_at')->limit(20)->pluck('id')->all();
@@ -30,20 +29,22 @@ final class RecoverGenerationWork
         $accepted = Generation::query()->where('submission_status', 'accepted')->whereIn('provider_status', ['queued', 'processing'])
             ->whereNotNull('provider_id')->where('next_attempt_at', '<=', now())->orderBy('next_attempt_at')->limit(20)->pluck('id')->all();
 
+        $work = [];
+        for ($i = 0; $i < 20; $i++) {
+            foreach ([ProcessWebhookEventJob::class => $inbox, SubmitGenerationJob::class => $submissions, ReconcileGenerationJob::class => $accepted] as $job => $ids) {
+                if (isset($ids[$i])) {
+                    $work[] = [$job, $ids[$i]];
+                }
+            }
+        }
+
         $count = 0;
-        $considered = 0;
-        for ($i = 0; $i < 20 && $considered < 20; $i++) {
-            foreach ([[ProcessWebhookEventJob::class, $inbox], [SubmitGenerationJob::class, $submissions], [ReconcileGenerationJob::class, $accepted]] as [$job, $ids]) {
-                if (! isset($ids[$i]) || $considered >= 20) {
-                    continue;
-                }
-                $considered++;
-                try {
-                    $job::dispatch($ids[$i]);
-                    $count++;
-                } catch (Throwable) {
-                    report(new RuntimeException('Durable generation work dispatch failed for '.$ids[$i]));
-                }
+        foreach (array_slice($work, 0, 20) as [$job, $id]) {
+            try {
+                $job::dispatch($id);
+                $count++;
+            } catch (Throwable) {
+                report(new RuntimeException('Durable generation work dispatch failed for '.$id));
             }
         }
 

@@ -5,11 +5,6 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-/**
- * Signed operator adjustments (D-B16): credit_adjustment adds, debit_adjustment
- * removes. Each carries a reason and no generation. Additive: existing rows
- * already satisfy the new rules.
- */
 return new class extends Migration
 {
     public function up(): void
@@ -34,7 +29,6 @@ return new class extends Migration
     public function down(): void
     {
         DB::transaction(function (): void {
-            // Adjustments are retained evidence the old constraints cannot hold.
             if (DB::table('credit_ledger_entries')->whereIn('type', ['credit_adjustment', 'debit_adjustment'])->exists()) {
                 throw new RuntimeException('Credit adjustments exist; this migration cannot be rolled back without discarding evidence.');
             }

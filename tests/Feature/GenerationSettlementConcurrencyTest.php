@@ -19,7 +19,6 @@ final class GenerationSettlementConcurrencyTest extends TestCase
         $this->assertSame('pixelforge_test', $context->db);
         $this->assertSame('pixelforge_test', $context->role);
         $this->assertSame(0, DB::transactionLevel());
-        // DatabaseMigrations leaves fixtures committed and visible to both workers.
         $generation = $this->preparedGeneration();
         $input = json_encode(['id' => $generation->id, 'fingerprint' => $this->fingerprint(), 'provider' => $this->evidence($generation)->toArray()], JSON_THROW_ON_ERROR);
         $workers = [];
@@ -35,8 +34,6 @@ final class GenerationSettlementConcurrencyTest extends TestCase
                 stream_set_timeout($pipes[1], 10);
                 $this->assertSame("ready\n", fgets($pipes[1]), 'Worker must bootstrap its independent test connection.');
             }
-            // Prove both independent sessions are concurrently blocked on the
-            // same generation lock, rather than merely launching them in order.
             $deadline = microtime(true) + 5;
             do {
                 DB::select('select pg_stat_clear_snapshot()');

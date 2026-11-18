@@ -24,8 +24,6 @@ final class GenerationHistoryTest extends TestCase
 
     public function test_unverified_users_are_forbidden(): void
     {
-        // The verified middleware redirects HTML requests but forbids JSON
-        // requests, which is what an Inertia navigation sends.
         $this->actingAs(User::factory()->unverified()->create())
             ->getJson(route('generations.index'))
             ->assertForbidden();

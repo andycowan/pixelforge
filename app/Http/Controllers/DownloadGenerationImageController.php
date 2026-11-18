@@ -12,7 +12,6 @@ final class DownloadGenerationImageController extends Controller
 {
     public function __invoke(Request $request, string $generation, DownloadGenerationImage $download): Response
     {
-        // Owner-scoped lookup: another user's id is indistinguishable from a missing one.
         $owned = Generation::query()->forUser($request->user())->findOrFail($generation);
         $image = $download->execute($owned);
 

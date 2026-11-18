@@ -10,18 +10,12 @@ use App\Http\Integrations\Pixelforge\Requests\GetUsage;
 use App\Models\CreditLedgerEntry;
 use App\Models\GenerationCharge;
 use App\Models\User;
+use App\Services\GenerationPricing;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use RuntimeException;
 use Saloon\Exceptions\Request\FatalRequestException;
 
-/**
- * Operator report for an inclusive UTC date range (D-060).
- *
- * Local figures come only from immutable charges made with the configured API
- * key, grouped by provider completion day. Each day is compared with what
- * Pixelforge says it billed that key; differences are reported, never fixed.
- */
 final class BuildOperatorReport
 {
     private const TOKENS = PixelforgePricing::TOKEN_TYPES;
@@ -29,8 +23,7 @@ final class BuildOperatorReport
     /** @return array<string, mixed> */
     public function execute(CarbonImmutable $start, CarbonImmutable $end): array
     {
-        $key = config('services.pixelforge.api_key');
-        $key = is_string($key) && trim($key) !== '' ? $key : null;
+        $key = PixelforgeConnector::configuredKey();
         $fingerprint = $key === null ? null : hash('sha256', $key);
 
         $rows = $fingerprint === null ? [] : GenerationCharge::dailyTotalsByUser($start, $end, $fingerprint);
@@ -50,39 +43,28 @@ final class BuildOperatorReport
             $days[] = [
                 'date' => $date,
                 ...self::money($local),
-                'users' => array_map(fn (array $row): array => [...self::owner($row['user_id'], $owners), ...self::money($row)], $dayRows),
+                'users' => array_map(fn (array $row): array => self::userFigures($row['user_id'], $row, $owners), $dayRows),
                 'pixelforge' => $usage === null ? null : self::reconcile($local, $usage->days[$date]),
             ];
         }
 
-        $users = array_values(array_map(fn (array $person): array => [...self::owner($person['user_id'], $owners), ...self::money($person['figures'])], $people));
-        usort($users, fn (array $a, array $b): int => $b['raw']['customer'] <=> $a['raw']['customer']);
+        usort($people, fn (array $a, array $b): int => $b['figures']['customer'] <=> $a['figures']['customer']);
         $totals = self::sum($rows);
         $bank = CreditLedgerEntry::bank();
-        $billed = null;
-        if ($usage !== null) {
-            $billed = array_fill_keys(ProviderUsage::FIELDS, 0);
-            foreach ($usage->days as $figures) {
-                foreach ($figures as $field => $value) {
-                    $billed[$field] += $value;
-                }
-            }
-        }
 
         return [
             'range' => ['start_date' => $start->toDateString(), 'end_date' => $end->toDateString()],
-            'days' => array_map(fn (array $day): array => self::strip($day), $days),
-            'users' => array_map(fn (array $user): array => self::strip($user), $users),
-            'totals' => self::strip(self::money($totals)),
+            'days' => $days,
+            'users' => array_map(fn (array $person): array => self::userFigures($person['user_id'], $person['figures'], $owners), $people),
+            'totals' => self::money($totals),
             'reconciliation' => [
                 'available' => $usage !== null,
                 'reason' => $unavailable,
                 'mismatched_days' => count(array_filter($days, fn (array $day): bool => ($day['pixelforge']['status'] ?? null) === 'mismatch')),
-                'pixelforge_total' => $billed === null ? null : self::reconcile($totals, $billed),
+                'pixelforge_total' => $usage === null ? null : self::reconcile($totals, $usage->total),
             ],
             'other_key_charges' => GenerationCharge::otherKeyCountBetween($start, $end, $fingerprint),
-            // Point in time, not range-bound: credit customers hold with us now.
-            'bank' => ['unspent_usd' => CreditLedgerEntry::format($bank['available'] + $bank['held']), 'held_usd' => CreditLedgerEntry::format($bank['held'])],
+            'bank' => ['unspent_usd' => GenerationPricing::formatUsd($bank['available'] + $bank['held']), 'held_usd' => GenerationPricing::formatUsd($bank['held'])],
             'key_configured' => $fingerprint !== null,
         ];
     }
@@ -112,8 +94,8 @@ final class BuildOperatorReport
     }
 
     /**
-     * @param  array<string, int>  $local  summed local figures
-     * @param  array<string, int>  $provider  ProviderUsage day figures
+     * @param  array<string, int>  $local
+     * @param  array<string, int>  $provider
      * @return array<string, mixed>
      */
     private static function reconcile(array $local, array $provider): array
@@ -128,9 +110,8 @@ final class BuildOperatorReport
             'status' => $mismatches === [] ? 'match' : 'mismatch',
             'mismatches' => $mismatches,
             'generations' => $provider['generations'],
-            'cost_usd' => CreditLedgerEntry::format($provider['cost_nanodollars']),
-            // Ours minus theirs: positive means we recorded more than Pixelforge billed.
-            'cost_difference_usd' => CreditLedgerEntry::format($local['provider'] - $provider['cost_nanodollars']),
+            'cost_usd' => GenerationPricing::formatUsd($provider['cost_nanodollars']),
+            'cost_difference_usd' => GenerationPricing::formatUsd($local['provider'] - $provider['cost_nanodollars']),
             'generations_difference' => $local['generations'] - $provider['generations'],
         ];
     }
@@ -152,8 +133,6 @@ final class BuildOperatorReport
     }
 
     /**
-     * Exact strings for the browser, plus the raw integers used for sorting/totals (stripped before output).
-     *
      * @param  array<string, mixed>  $figures
      * @return array<string, mixed>
      */
@@ -163,38 +142,27 @@ final class BuildOperatorReport
 
         return [
             'generations' => $figures['generations'],
-            'credit_spend_usd' => CreditLedgerEntry::format($figures['customer']),
-            'provider_cost_usd' => CreditLedgerEntry::format($figures['provider']),
-            'profit_usd' => CreditLedgerEntry::format($figures['customer'] - $figures['provider']),
+            'credit_spend_usd' => GenerationPricing::formatUsd($figures['customer']),
+            'provider_cost_usd' => GenerationPricing::formatUsd($figures['provider']),
+            'profit_usd' => GenerationPricing::formatUsd($figures['customer'] - $figures['provider']),
             'tokens' => array_intersect_key($figures, array_flip(self::TOKENS)),
-            'raw' => $figures,
         ];
     }
 
     /**
+     * @param  array<string, mixed>  $figures
      * @param  Collection<int, User>  $owners
-     * @return array{user_id: int|null, name: string, email: string|null}
+     * @return array<string, mixed>
      */
-    private static function owner(?int $userId, $owners): array
+    private static function userFigures(?int $userId, array $figures, Collection $owners): array
     {
         $owner = $userId === null ? null : $owners->get($userId);
 
-        return $owner === null
-            ? ['user_id' => $userId, 'name' => 'Deleted user', 'email' => null]
-            : ['user_id' => $userId, 'name' => $owner->name, 'email' => $owner->email];
-    }
-
-    /**
-     * @param  array<string, mixed>  $row
-     * @return array<string, mixed>
-     */
-    private static function strip(array $row): array
-    {
-        unset($row['raw']);
-        if (isset($row['users'])) {
-            $row['users'] = array_map(fn (array $user): array => self::strip($user), $row['users']);
-        }
-
-        return $row;
+        return [
+            'user_id' => $userId,
+            'name' => $owner === null ? 'Deleted user' : $owner->name,
+            'email' => $owner?->email,
+            ...self::money($figures),
+        ];
     }
 }

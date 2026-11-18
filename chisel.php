@@ -63,10 +63,6 @@ function chiselRemoveNpmPackages(Chisel $c, string ...$packages): void
 }
 
 /**
- * Framework-specific filenames are supplied by the sibling chisel-paths.php
- * that ships with each Inertia kit (React/Svelte/Vue). After build, both files
- * land in the project root.
- *
  * @var array{
  *     login: string,
  *     register: string,
@@ -289,7 +285,6 @@ return Chisel::script(__DIR__)
             ->removeLinesContaining('"@php artisan install:features --ansi"');
 
         chiselRun(['composer', 'lint'], 'Composer Lint');
-        // Use the same PHP executable as Artisan when Windows has multiple installations on PATH.
         chiselRun([PHP_BINARY, 'artisan', 'wayfinder:generate', '--with-form', '--no-interaction'], 'Generate Wayfinder Resources');
 
         if (! chiselSkipsNode()) {

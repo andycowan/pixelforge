@@ -64,7 +64,6 @@ final class OutboxMessage extends Model
 
     public function markPublished(): void
     {
-        // A concurrent publisher may already have won; duplicate delivery is harmless.
         self::query()->whereKey($this->id)->whereNull('published_at')->update([
             'published_at' => now(),
             'publication_attempts' => DB::raw('publication_attempts + 1'),
@@ -83,7 +82,6 @@ final class OutboxMessage extends Model
     /** @param array<string, mixed> $options */
     public function save(array $options = [])
     {
-        // Publication uses the named mutations above; intent cannot be edited.
         if ($this->exists || ! $this->recording || $this->getConnection()->transactionLevel() < 1) {
             throw new LogicException('Outbox intent is immutable and recorded only by a generation transaction.');
         }

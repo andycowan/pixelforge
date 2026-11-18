@@ -1,21 +1,11 @@
-/**
- * Types for the read-only quote preview on the workspace.
- *
- * The shapes mirror the flat JSON contract of `POST /generations/quote`
- * Money is always an exact decimal string; it must never be
- * parsed into a JavaScript number.
- */
-
 export type GenerationSize = '1024x1024' | '1536x1024' | '1024x1536';
 
 export type GenerationQuality = 'low' | 'medium' | 'high';
 
 export type QuoteField = 'prompt' | 'size' | 'quality' | 'reference_images';
 
-/** Friendly, per-field messages shown beneath the matching control. */
 export type QuoteFieldErrors = Partial<Record<QuoteField, string>>;
 
-/** The form owns free-text input; references stay one-per-line while typing. */
 export type QuoteFormInput = {
     prompt: string;
     size: GenerationSize;
@@ -23,7 +13,6 @@ export type QuoteFormInput = {
     referenceUrls: string;
 };
 
-/** Exact request body accepted by the quote endpoint. */
 export type QuoteRequest = {
     prompt: string;
     size: GenerationSize;
@@ -31,7 +20,6 @@ export type QuoteRequest = {
     reference_images: string[];
 };
 
-/** Flat quote response; there is no `data` envelope. */
 export type QuotePreview = {
     affordable: boolean;
     currency: string;
@@ -72,6 +60,5 @@ export type QuoteValidation = {
     promptLength: number;
     referenceCount: number;
     fieldErrors: QuoteFieldErrors;
-    /** `null` when the client should not send a quote request. */
     request: QuoteRequest | null;
 };

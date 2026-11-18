@@ -5,18 +5,15 @@ namespace App\Http\Integrations\Pixelforge\Data;
 use App\Exceptions\ProviderPayloadException;
 use Carbon\CarbonImmutable;
 
-/**
- * Validated provider usage for an inclusive UTC date range.
- *
- * Costs become exact integer nanodollars; every requested day must be present
- * exactly once, and the provider's own total must equal the sum of its days.
- */
 final readonly class ProviderUsage
 {
     public const FIELDS = ['generations', 'input_text_tokens', 'input_image_tokens', 'output_tokens', 'reasoning_tokens', 'cost_nanodollars'];
 
-    /** @param array<string, array<string, int>> $days date => FIELDS => value */
-    private function __construct(public array $days) {}
+    /**
+     * @param  array<string, array<string, int>>  $days
+     * @param  array<string, int>  $total
+     */
+    private function __construct(public array $days, public array $total) {}
 
     public static function fromArray(mixed $payload, CarbonImmutable $start, CarbonImmutable $end): self
     {
@@ -52,7 +49,7 @@ final readonly class ProviderUsage
             throw new ProviderPayloadException('Pixelforge usage total does not equal the sum of its days.');
         }
 
-        return new self($days);
+        return new self($days, $sum);
     }
 
     /** @return array<string, int> */
@@ -70,7 +67,6 @@ final readonly class ProviderUsage
             $figures[$field] = $value;
         }
         $cost = $row['cost_usd'] ?? null;
-        // Exactly nine decimal places, as documented: the digits are the nanodollars.
         if (! is_string($cost) || preg_match('/\A(0|[1-9]\d{0,8})\.(\d{9})\z/D', $cost, $parts) !== 1) {
             throw new ProviderPayloadException('Invalid Pixelforge usage cost.');
         }

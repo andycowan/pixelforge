@@ -10,9 +10,7 @@ use PHPUnit\Framework\TestCase;
 
 final class ProviderGenerationStateMachineTest extends TestCase
 {
-    /**
-     * @return array<string, array{?ProviderGenerationStatus, ProviderGenerationStatus, ProviderTransitionOutcome}>
-     */
+    /** @return array<string, array{?ProviderGenerationStatus, ProviderGenerationStatus, ProviderTransitionOutcome}> */
     public static function transitionMatrix(): array
     {
         $queued = ProviderGenerationStatus::Queued;
@@ -68,9 +66,7 @@ final class ProviderGenerationStateMachineTest extends TestCase
         );
     }
 
-    /**
-     * @return array<string, array{?ProviderGenerationStatus, bool, bool}>
-     */
+    /** @return array<string, array{?ProviderGenerationStatus, bool, bool}> */
     public static function guards(): array
     {
         return [

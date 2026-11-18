@@ -20,7 +20,6 @@ final class SetAdmin extends Command
 
             return self::FAILURE;
         }
-        // is_admin is deliberately not mass assignable.
         $user->forceFill(['is_admin' => ! $this->option('revoke')])->save();
         $this->info($user->is_admin ? "{$user->email} is now an operator." : "{$user->email} is no longer an operator.");
 

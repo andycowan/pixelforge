@@ -73,9 +73,7 @@ final class PixelforgeGenerationRequestsTest extends TestCase
         $this->assertSame(5.0, $pending?->config()->get('timeout'));
     }
 
-    /**
-     * @return array<string, array{string}>
-     */
+    /** @return array<string, array{string}> */
     public static function blankKeys(): array
     {
         return [
@@ -190,9 +188,7 @@ final class PixelforgeGenerationRequestsTest extends TestCase
         $this->assertStringNotContainsString(self::TEST_KEY, (string) json_encode($body, JSON_THROW_ON_ERROR));
     }
 
-    /**
-     * @return array<string, array{string}>
-     */
+    /** @return array<string, array{string}> */
     public static function malformedSuccessBodies(): array
     {
         return [
@@ -240,9 +236,7 @@ final class PixelforgeGenerationRequestsTest extends TestCase
         Saloon::assertSentCount(1);
     }
 
-    /**
-     * @return array<string, array{array<string, mixed>}>
-     */
+    /** @return array<string, array{array<string, mixed>}> */
     public static function invalidCreatePayloads(): array
     {
         $invalid = [];
@@ -308,9 +302,7 @@ final class PixelforgeGenerationRequestsTest extends TestCase
         new CreateGeneration(self::IDEMPOTENCY_KEY, $payload);
     }
 
-    /**
-     * @return array<string, array{string}>
-     */
+    /** @return array<string, array{string}> */
     public static function invalidIdempotencyKeys(): array
     {
         return [
@@ -329,9 +321,7 @@ final class PixelforgeGenerationRequestsTest extends TestCase
         new CreateGeneration($key, self::baseCreatePayload());
     }
 
-    /**
-     * @return array<string, array{string}>
-     */
+    /** @return array<string, array{string}> */
     public static function invalidProviderIds(): array
     {
         return [
@@ -360,9 +350,7 @@ final class PixelforgeGenerationRequestsTest extends TestCase
         );
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     private function fixturePayload(string $fixture): array
     {
         return json_decode(
@@ -373,9 +361,7 @@ final class PixelforgeGenerationRequestsTest extends TestCase
         );
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     private function createPayload(): array
     {
         $payload = self::baseCreatePayload();
@@ -384,9 +370,7 @@ final class PixelforgeGenerationRequestsTest extends TestCase
         return $payload;
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     private static function baseCreatePayload(): array
     {
         return [

@@ -11,9 +11,6 @@ class ProfileUpdateRequest extends FormRequest
 {
     use ProfileValidationRules;
 
-    /**
-     * Prepare the data for validation.
-     */
     protected function prepareForValidation(): void
     {
         if (config('fortify.lowercase_usernames') && is_string($this->input('email'))) {
@@ -21,11 +18,7 @@ class ProfileUpdateRequest extends FormRequest
         }
     }
 
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, ValidationRule|array<mixed>|string>
-     */
+    /** @return array<string, ValidationRule|array<mixed>|string> */
     public function rules(): array
     {
         return $this->profileRules($this->user()->id);

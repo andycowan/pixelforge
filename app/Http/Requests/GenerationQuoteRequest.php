@@ -8,14 +8,6 @@ use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-/**
- * HTTP validation for generation options.
- *
- * Shared by the read-only quote preview and the real generation request. Only
- * the generation options are accepted. Client-supplied money, quotes or
- * snapshots have no rules and are never read, keeping this request aligned
- * with what the generation model will accept.
- */
 class GenerationQuoteRequest extends FormRequest
 {
     public function authorize(): bool
@@ -23,9 +15,7 @@ class GenerationQuoteRequest extends FormRequest
         return true;
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     public function rules(): array
     {
         return [

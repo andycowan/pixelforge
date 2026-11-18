@@ -56,7 +56,6 @@ final class ProcessWebhookEventJob implements ShouldQueue
         }
 
         try {
-            // Apply owns generation-FIRST locking and the atomic processed marker.
             $apply->execute($id, $provider, $event->provider_key_fingerprint, $event->id);
         } catch (ProviderEvidenceConflict) {
             $this->finish('conflict', 'provider_evidence_conflict');

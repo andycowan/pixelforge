@@ -13,12 +13,9 @@ const props = defineProps<{
     providerStatus: ProviderGenerationStatus | null;
     submissionStatus: GenerationSubmissionStatus;
     alt: string;
-    /** Same-origin download route; the provider host can't be downloaded from directly. */
     downloadUrl?: string;
 }>();
 
-// Expiry is evaluated against the stored timestamp only. We never request a
-// new URL to extend a provider link that has expired.
 const expired = computed(() => isResultImageExpired(props.expiresAt));
 
 const loadFailed = ref(false);

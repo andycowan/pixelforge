@@ -18,13 +18,10 @@ final class CreditHoldConcurrencyTest extends TestCase
         $context = DB::selectOne('select current_database() as db, current_user as role');
         $this->assertSame('pixelforge_test', $context->db);
         $this->assertSame('pixelforge_test', $context->role);
-        // DatabaseMigrations leaves fixtures committed and visible to both workers.
-        // $0.09 covers exactly one $0.09-maximum request.
         $user = User::factory()->withCredit(90_000_000)->create();
         $workers = [];
         DB::beginTransaction();
         try {
-            // Hold the owner lock so both workers quote, then block on it together.
             User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
             for ($i = 0; $i < 2; $i++) {
                 $process = proc_open([PHP_BINARY, base_path('tests/Fixtures/request-generation.php')], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, base_path());

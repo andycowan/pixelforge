@@ -14,6 +14,8 @@ use Brick\Math\RoundingMode;
 
 final class GenerationPricing
 {
+    public const CENT = 10_000_000;
+
     /** @param array<array-key, mixed> $referenceImages */
     public function quote(
         string $prompt,
@@ -79,8 +81,6 @@ final class GenerationPricing
     }
 
     /**
-     * Sum exact components before requiring the provider total to be whole nanodollars.
-     *
      * @param  array<string, mixed>  $usage
      * @param  array<string, mixed>  $rates
      */
@@ -110,17 +110,12 @@ final class GenerationPricing
         }
 
         try {
-            // USD per million tokens to nanodollars: multiply the summed value by 1000.
             return $total->multipliedBy(1000)->toBigInteger()->toInt();
         } catch (MathException $exception) {
             throw new PricingException('Provider cost is not exactly representable in supported nanodollars.', previous: $exception);
         }
     }
 
-    /** One cent in nanodollars: customer prices are whole cents. */
-    public const CENT = 10_000_000;
-
-    /** Provider cost x 5/4, rounded up once to the next whole cent. */
     public function customerCost(mixed $providerCost): int
     {
         if (! is_int($providerCost) || $providerCost < 0) {
@@ -135,5 +130,19 @@ final class GenerationPricing
         } catch (MathException $exception) {
             throw new PricingException('Customer cost exceeds the supported integer range.', previous: $exception);
         }
+    }
+
+    public static function formatUsd(int $nanodollars): string
+    {
+        $magnitude = abs($nanodollars);
+
+        return ($nanodollars < 0 ? '-' : '').sprintf('%d.%09d', intdiv($magnitude, 1_000_000_000), $magnitude % 1_000_000_000);
+    }
+
+    public static function formatDollars(int $nanodollars): string
+    {
+        $cents = intdiv(abs($nanodollars), self::CENT);
+
+        return ($nanodollars < 0 ? '-' : '').sprintf('$%d.%02d', intdiv($cents, 100), $cents % 100);
     }
 }

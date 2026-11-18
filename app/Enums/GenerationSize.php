@@ -2,9 +2,6 @@
 
 namespace App\Enums;
 
-/**
- * Supported output sizes, backed by the provider wire values.
- */
 enum GenerationSize: string
 {
     case Square = '1024x1024';

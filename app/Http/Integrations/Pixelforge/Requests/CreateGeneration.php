@@ -4,7 +4,6 @@ namespace App\Http\Integrations\Pixelforge\Requests;
 
 use App\Enums\GenerationQuality;
 use App\Enums\GenerationSize;
-use App\Exceptions\ProviderPayloadException;
 use App\Http\Integrations\Pixelforge\Data\ProviderGeneration;
 use InvalidArgumentException;
 use Saloon\Contracts\Body\HasBody;
@@ -12,14 +11,7 @@ use Saloon\Enums\Method;
 use Saloon\Http\Request;
 use Saloon\Http\Response;
 use Saloon\Traits\Body\HasJsonBody;
-use Throwable;
 
-/**
- * Submit one immutable generation request.
- *
- * Retry timing belongs to the submission job: this request has no Saloon
- * retries and carries the caller's stable idempotency key unchanged.
- */
 final class CreateGeneration extends Request implements HasBody
 {
     use HasJsonBody;
@@ -29,9 +21,7 @@ final class CreateGeneration extends Request implements HasBody
     /** @var array<string, mixed> */
     private readonly array $payload;
 
-    /**
-     * @param  array<array-key, mixed>  $payload
-     */
+    /** @param  array<array-key, mixed>  $payload */
     public function __construct(private readonly string $idempotencyKey, array $payload)
     {
         if (trim($idempotencyKey) === ''
@@ -74,18 +64,7 @@ final class CreateGeneration extends Request implements HasBody
 
     public function createDtoFromResponse(Response $response): ProviderGeneration
     {
-        try {
-            /** @var mixed $payload */
-            $payload = $response->json();
-        } catch (Throwable $exception) {
-            throw new ProviderPayloadException('Invalid Pixelforge generation response.', previous: $exception);
-        }
-
-        if (! is_array($payload)) {
-            throw new ProviderPayloadException('Invalid Pixelforge generation response.');
-        }
-
-        return ProviderGeneration::fromArray($payload);
+        return ProviderGeneration::fromResponse($response);
     }
 
     private static function prompt(mixed $value): string

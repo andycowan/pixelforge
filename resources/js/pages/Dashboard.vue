@@ -23,7 +23,6 @@ defineOptions({
 });
 
 const props = defineProps<{
-    /** Server-side configuration only; the key itself is never sent. */
     generation_enabled: boolean;
 }>();
 

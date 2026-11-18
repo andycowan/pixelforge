@@ -75,12 +75,7 @@ class Generation extends Model
     /** @use HasFactory<GenerationFactory> */
     use HasFactory, HasUlids;
 
-    /**
-     * New requests begin pending and unobserved. Provider evidence is never
-     * a caller-provided default.
-     *
-     * @var array<string, mixed>
-     */
+    /** @var array<string, mixed> */
     protected $attributes = [
         'submission_status' => 'pending',
         'submission_attempts' => 0,
@@ -93,12 +88,7 @@ class Generation extends Model
     /** @var list<string> */
     private array $authorizedMutation = [];
 
-    /**
-     * Submission bookkeeping and provider evidence can only be changed by
-     * the named transaction-bound mutations, never raw assignment.
-     *
-     * @var list<string>
-     */
+    /** @var list<string> */
     private const RESERVED_ATTRIBUTES = [
         'submission_status',
         'submission_attempts',
@@ -119,11 +109,7 @@ class Generation extends Model
         'revision',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
+    /** @return array<string, string> */
     protected function casts(): array
     {
         return [
@@ -151,9 +137,6 @@ class Generation extends Model
     }
 
     /**
-     * Reject reserved attributes loudly rather than silently dropping them.
-     * Direct property assignment is guarded by save as well as model events.
-     *
      * @param  array<string, mixed>  $attributes
      * @return $this
      */
@@ -177,15 +160,9 @@ class Generation extends Model
         static::updating(function (Generation $generation): void {
             $generation->guardUpdate();
         });
-
-        static::deleting(function (): void {
-            throw new LogicException('Generation records are retained as evidence; deletion is not supported.');
-        });
     }
 
-    /**
-     * @return BelongsTo<User, $this>
-     */
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
@@ -198,11 +175,6 @@ class Generation extends Model
     }
 
     /** @return LengthAwarePaginator<int, array<string, mixed>> */
-    /**
-     * Owned history, optionally narrowed to prompts containing $search (case-insensitive, literal).
-     *
-     * @return LengthAwarePaginator<int, array<string, mixed>>
-     */
     public static function historyFor(User $user, ?string $search = null): LengthAwarePaginator
     {
         return self::query()->forUser($user)
@@ -216,11 +188,7 @@ class Generation extends Model
             ->through(fn (Generation $generation): array => $generation->toHistoryArray());
     }
 
-    /**
-     * Scope a query to generations owned by the given user.
-     *
-     * @param  Builder<Generation>  $query
-     */
+    /** @param  Builder<Generation>  $query */
     #[Scope]
     protected function forUser(Builder $query, User $user): void
     {
@@ -231,9 +199,6 @@ class Generation extends Model
         $query->where('user_id', $user->getKey());
     }
 
-    /**
-     * A fresh machine for guards only. It does not persist its own mutations.
-     */
     public function stateMachine(): ProviderGenerationStateMachine
     {
         return new ProviderGenerationStateMachine($this->provider_status);
@@ -293,8 +258,6 @@ class Generation extends Model
         if ($this->submission_status === GenerationSubmissionStatus::Rejected) {
             return;
         }
-        // The worker knows whether uncertainty preceded this particular claim.
-        // Pending/rejected is allowed only when it can prove no prior acceptance.
         $this->persistMutation([
             'submission_status' => $status,
             'submission_error' => $error,
@@ -369,7 +332,6 @@ class Generation extends Model
             'image_url_expires_at' => $provider->imageUrlExpiresAt,
             'provider_error' => $provider->error,
         ];
-        // JSONB reorders object keys; compare typed evidence, not JSON text.
         foreach ($changes as $field => $value) {
             $current = $this->getAttribute($field);
             $same = match (true) {
@@ -405,7 +367,8 @@ class Generation extends Model
         }
     }
 
-    /** @param array<string, mixed>|null $left
+    /**
+     * @param  array<string, mixed>|null  $left
      * @param  array<string, mixed>|null  $right
      */
     private static function sameDictionary(?array $left, ?array $right): bool
@@ -463,18 +426,12 @@ class Generation extends Model
     /** @param array<string, mixed> $options */
     public function save(array $options = [])
     {
-        // Enforce invariants even when Eloquent events are deliberately muted.
         $this->exists ? $this->guardUpdate() : $this->guardCreation();
 
         return parent::save($options);
     }
 
-    /**
-     * Conservative public projection. Internal keys, quotes, errors, usage and
-     * provider identifiers stay out of the browser-facing shape.
-     *
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     public function toHistoryArray(): array
     {
         return [
@@ -485,8 +442,8 @@ class Generation extends Model
             'reference_images' => $this->reference_images,
             'submission_status' => $this->submission_status->value,
             'provider_status' => $this->provider_status?->value,
-            'estimated_cost_usd' => self::formatNanodollars($this->estimated_cost_nanodollars),
-            'maximum_cost_usd' => self::formatNanodollars($this->maximum_cost_nanodollars),
+            'estimated_cost_usd' => GenerationPricing::formatUsd($this->estimated_cost_nanodollars),
+            'maximum_cost_usd' => GenerationPricing::formatUsd($this->maximum_cost_nanodollars),
             'actual_cost_usd' => match (true) {
                 $this->provider_status === ProviderGenerationStatus::Succeeded => $this->charge?->customerCostUsd(),
                 $this->submission_status === GenerationSubmissionStatus::Rejected,
@@ -500,7 +457,6 @@ class Generation extends Model
         ];
     }
 
-    /** A readable, filesystem-safe name such as "pixelforge-a-misty-harbour-x7k2pq.png". */
     public function imageDownloadName(string $extension): string
     {
         $slug = Str::slug(Str::limit($this->prompt, 40, '', preserveWords: true)) ?: 'image';
@@ -511,7 +467,6 @@ class Generation extends Model
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        // Implicit JSON/Inertia serialization must use the same safe public shape.
         return $this->toHistoryArray();
     }
 
@@ -651,14 +606,5 @@ class Generation extends Model
         }
 
         return $value;
-    }
-
-    private static function formatNanodollars(int $nanodollars): string
-    {
-        return sprintf(
-            '%d.%09d',
-            intdiv($nanodollars, 1_000_000_000),
-            $nanodollars % 1_000_000_000,
-        );
     }
 }

@@ -9,13 +9,6 @@ use App\Http\Integrations\Pixelforge\Requests\GetPricing;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Saloon\Exceptions\Request\FatalRequestException;
 
-/**
- * Obtain the validated provider pricing catalogue.
- *
- * Only a validated catalogue array is cached: cache hits are re-validated, a
- * malformed cache entry is evicted and refetched once, and failures are never
- * cached or served from an expired entry.
- */
 final class GetPricingCatalog
 {
     public const CACHE_KEY = 'pixelforge.pricing.v1';
@@ -35,8 +28,6 @@ final class GetPricingCatalog
             try {
                 return PixelforgePricing::fromArray($cached);
             } catch (PricingException) {
-                // A stored catalogue that no longer validates must never be
-                // served. Discard it and fall through to one fresh fetch.
                 $this->cache->forget(self::CACHE_KEY);
             }
         } elseif ($cached !== null) {
@@ -50,9 +41,7 @@ final class GetPricingCatalog
         return $pricing;
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     private function fetchPayload(): array
     {
         try {
@@ -65,8 +54,6 @@ final class GetPricingCatalog
             throw new PricingException(sprintf('The Pixelforge pricing catalogue returned HTTP %d.', $response->status()));
         }
 
-        // Decode without throwing so non-JSON, empty and scalar bodies are all
-        // reported as an unavailable catalogue rather than a PHP error.
         $payload = json_decode($response->body(), true);
 
         if (! is_array($payload)) {

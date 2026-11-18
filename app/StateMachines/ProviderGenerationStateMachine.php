@@ -5,11 +5,6 @@ namespace App\StateMachines;
 use App\Enums\ProviderGenerationStatus;
 use App\Enums\ProviderTransitionOutcome;
 
-/**
- * Create one instance per generation from the locked model's current state.
- * Guards describe new transitions, not whether duplicate delivery is safe.
- * Payload validation and atomic settlement remain caller responsibilities.
- */
 final class ProviderGenerationStateMachine
 {
     private ?ProviderGenerationStatus $status;
@@ -81,7 +76,6 @@ final class ProviderGenerationStateMachine
         return $outcome;
     }
 
-    // No default: added statuses require explicit transition review.
     private function classify(ProviderGenerationStatus $observed): ProviderTransitionOutcome
     {
         if ($this->status === null) {

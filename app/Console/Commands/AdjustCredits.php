@@ -3,8 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Actions\Credits\AdjustCredits as AdjustCreditsAction;
-use App\Models\CreditLedgerEntry;
 use App\Models\User;
+use App\Services\GenerationPricing;
 use Illuminate\Console\Command;
 use InvalidArgumentException;
 
@@ -31,7 +31,7 @@ final class AdjustCredits extends Command
             return self::FAILURE;
         }
         [$dollars, $cents] = array_pad(explode('.', $to), 2, '0');
-        $target = ((int) $dollars * 100 + (int) str_pad($cents, 2, '0')) * 10_000_000;
+        $target = ((int) $dollars * 100 + (int) str_pad($cents, 2, '0')) * GenerationPricing::CENT;
 
         try {
             $result = $adjust->toTarget($user, $target, (string) $this->option('reason'));
@@ -42,9 +42,9 @@ final class AdjustCredits extends Command
         }
 
         $this->info($result['entry'] === null
-            ? 'Available balance is already '.CreditLedgerEntry::formatDollars($result['after']).'; nothing recorded.'
-            : sprintf('Available balance %s -> %s (%s %s).', CreditLedgerEntry::formatDollars($result['before']), CreditLedgerEntry::formatDollars($result['after']),
-                $result['entry']->type->value, CreditLedgerEntry::formatDollars($result['entry']->amount_nanodollars)));
+            ? 'Available balance is already '.GenerationPricing::formatDollars($result['after']).'; nothing recorded.'
+            : sprintf('Available balance %s -> %s (%s %s).', GenerationPricing::formatDollars($result['before']), GenerationPricing::formatDollars($result['after']),
+                $result['entry']->type->value, GenerationPricing::formatDollars($result['entry']->amount_nanodollars)));
 
         return self::SUCCESS;
     }

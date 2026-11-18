@@ -32,7 +32,6 @@ final class GenerationPricingTest extends TestCase
         $this->assertSame(8000, $quote->tokenMaximum['reasoning_tokens']);
         $this->assertSame(330_050_000, $quote->estimatedProviderCostNanodollars);
         $this->assertSame(373_875_000, $quote->maximumProviderCostNanodollars);
-        // 412,562,500 and 467,343,750 marked-up nanodollars round up to whole cents.
         $this->assertSame(420_000_000, $quote->estimatedCostNanodollars);
         $this->assertSame(470_000_000, $quote->maximumCostNanodollars);
         $this->assertSame('0.470000000', $quote->toArray()['maximum_cost_usd']);
@@ -84,7 +83,6 @@ final class GenerationPricingTest extends TestCase
         $this->assertSame('0.090000000', $quote->toArray()['maximum_cost_usd']);
         $this->assertSame(['ceiling', 2], [$quote->snapshot()['policy']['rounding'], $quote->snapshot()['policy']['precision']]);
         $this->assertSame('usd', $quote->toArray()['currency']);
-        // The browser projection carries customer prices only; cost evidence stays in snapshot().
         $this->assertSame(['currency', 'estimated_cost_usd', 'maximum_cost_usd'], array_keys($quote->toArray()));
         $this->assertSame($pricing->rates, $quote->snapshot()['rates']);
         $this->assertSame('5/4', $quote->snapshot()['policy']['markup']);
@@ -130,7 +128,6 @@ final class GenerationPricingTest extends TestCase
         $usage = ['input_text_tokens' => 12, 'input_image_tokens' => 765, 'output_tokens' => 6450, 'reasoning_tokens' => 3184, 'total_tokens' => 10411];
 
         $this->assertSame(305_510_000, $service->providerCost($usage, $rates));
-        // 381,887,500 marked-up nanodollars charge $0.39.
         $this->assertSame(390_000_000, $service->customerCost($service->providerCost($usage, $rates)));
         $newRates = array_fill_keys(PixelforgePricing::TOKEN_TYPES, '0.00');
         $this->assertSame(0, $service->providerCost($usage, $newRates));
@@ -170,7 +167,6 @@ final class GenerationPricingTest extends TestCase
         $rates = array_fill_keys(PixelforgePricing::TOKEN_TYPES, '0.001');
         $usage = ['input_text_tokens' => 1, 'input_image_tokens' => 1, 'output_tokens' => 0, 'reasoning_tokens' => 0];
         $service = new GenerationPricing;
-        // Two nanodollars marked up together charge one cent; rounding each category would charge two.
         $this->assertSame(10_000_000, $service->customerCost($service->providerCost($usage, $rates)));
     }
 

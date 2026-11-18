@@ -6,7 +6,6 @@ use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
-/** An inclusive UTC date range Pixelforge's usage endpoint also accepts: at most 92 days, not in the future. */
 final class OperatorReportRequest extends FormRequest
 {
     public const MAX_DAYS = 92;
@@ -38,11 +37,7 @@ final class OperatorReportRequest extends FormRequest
         }];
     }
 
-    /**
-     * Defaults to the last 30 days ending today (UTC), like Pixelforge's usage endpoint.
-     *
-     * @return array{0: CarbonImmutable, 1: CarbonImmutable}
-     */
+    /** @return array{0: CarbonImmutable, 1: CarbonImmutable} */
     public function range(): array
     {
         $end = $this->filled('end_date') ? CarbonImmutable::parse((string) $this->string('end_date'), 'UTC')->startOfDay() : CarbonImmutable::today('UTC');

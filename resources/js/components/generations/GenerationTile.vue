@@ -11,8 +11,9 @@ import { describeActualCost, describeGenerationState } from '@/lib/generation';
 import { download } from '@/routes/generations';
 import {
     formatUsdAmount,
-    quoteQualityOptions,
-    quoteSizeOptions,
+    qualityLabel,
+    referenceImagesLabel,
+    sizeLabel,
 } from '@/lib/quote';
 import type {
     GenerationHistoryItem,
@@ -25,21 +26,16 @@ const state = computed(() => describeGenerationState(props.item));
 const cost = computed(() => describeActualCost(props.item));
 const open = ref(false);
 
-const badgeVariant = computed(() => {
-    const variants: Record<
-        GenerationStateTone,
-        'default' | 'secondary' | 'destructive' | 'outline'
-    > = {
-        pending: 'outline',
-        active: 'secondary',
-        success: 'default',
-        error: 'destructive',
-    };
+const badgeVariants: Record<
+    GenerationStateTone,
+    'default' | 'secondary' | 'destructive' | 'outline'
+> = {
+    pending: 'outline',
+    active: 'secondary',
+    success: 'default',
+    error: 'destructive',
+};
 
-    return variants[state.value.tone];
-});
-
-// The settled amount is shown exactly as the server recorded it, never the quote.
 const costText = computed(() =>
     cost.value.kind === 'settled' && props.item.actual_cost_usd !== null
         ? `${cost.value.label} $${formatUsdAmount(props.item.actual_cost_usd)} USD`
@@ -47,21 +43,14 @@ const costText = computed(() =>
 );
 
 const parameters = computed(() => {
-    const size =
-        quoteSizeOptions.find((option) => option.value === props.item.size)
-            ?.label ?? props.item.size;
-    const quality =
-        quoteQualityOptions.find(
-            (option) => option.value === props.item.quality,
-        )?.label ?? props.item.quality;
     const references = props.item.reference_images.length;
 
     return [
-        size,
-        `${quality} quality`,
+        sizeLabel(props.item.size),
+        `${qualityLabel(props.item.quality)} quality`,
         references === 0
             ? 'No reference images'
-            : `${references} reference ${references === 1 ? 'image' : 'images'}`,
+            : referenceImagesLabel(references),
     ].join(' · ');
 });
 
@@ -88,10 +77,9 @@ const createdAt = computed(() => {
                 :download-url="download(item.id).url"
                 :alt="`Generated image for: ${item.prompt}`"
             />
-            <!-- A clean library: only unfinished or unsuccessful work carries a badge. -->
             <Badge
                 v-if="state.tone !== 'success'"
-                :variant="badgeVariant"
+                :variant="badgeVariants[state.tone]"
                 class="absolute top-2 left-2 shadow-sm"
                 >{{ state.label }}</Badge
             >
@@ -99,7 +87,6 @@ const createdAt = computed(() => {
 
         <Tooltip v-model:open="open" :disable-closing-trigger="true">
             <TooltipTrigger as-child>
-                <!-- A button, not a hover-only strip: details also open on focus and tap. -->
                 <button
                     type="button"
                     :aria-expanded="open"

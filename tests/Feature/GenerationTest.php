@@ -155,7 +155,6 @@ final class GenerationTest extends TestCase
         ]);
         $this->assertSame('0.010000000', $cent->toHistoryArray()['estimated_cost_usd']);
 
-        // 9,007,199,260,000,000 is above JavaScript's safe integer limit.
         $large = Generation::factory()->for($this->user)->create([
             'estimated_cost_nanodollars' => 9_007_199_260_000_000,
             'maximum_cost_nanodollars' => 9_007_199_260_000_000,
@@ -361,7 +360,6 @@ final class GenerationTest extends TestCase
     {
         $generation = Generation::factory()->for($this->user)->create();
 
-        // Raw SQL is a trusted fixture here; the model deliberately refuses this write.
         DB::table('generations')->where('id', $generation->id)->update([
             'provider_id' => 'pf_processing',
             'provider_status' => 'processing',
@@ -543,9 +541,7 @@ final class GenerationTest extends TestCase
         $this->assertTrue(Schema::hasTable('generations'));
     }
 
-    /**
-     * @param  array<string, mixed>  $overrides
-     */
+    /** @param  array<string, mixed>  $overrides */
     private function insertRawGeneration(array $overrides = []): void
     {
         DB::table('generations')->insert(array_merge([
@@ -562,9 +558,7 @@ final class GenerationTest extends TestCase
         ], $overrides));
     }
 
-    /**
-     * @param  array<string, mixed>  $overrides
-     */
+    /** @param  array<string, mixed>  $overrides */
     private function assertRawInsertRejected(array $overrides, string $sqlState = '23514'): void
     {
         $this->assertDatabaseRejects(
@@ -576,7 +570,6 @@ final class GenerationTest extends TestCase
     private function assertDatabaseRejects(Closure $callback, string $sqlState): void
     {
         try {
-            // A savepoint lets the test continue after a violated constraint.
             DB::transaction($callback);
         } catch (QueryException $exception) {
             $this->assertSame($sqlState, (string) $exception->getCode());
@@ -587,9 +580,7 @@ final class GenerationTest extends TestCase
         $this->fail('Expected the database to reject the operation.');
     }
 
-    /**
-     * @param  array<string, mixed>  $overrides
-     */
+    /** @param  array<string, mixed>  $overrides */
     private function assertModelRejects(array $overrides): void
     {
         $generation = Generation::factory()->for($this->user)->make($overrides);

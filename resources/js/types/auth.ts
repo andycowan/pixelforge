@@ -4,7 +4,6 @@ export type User = {
     email: string;
     avatar?: string;
     email_verified_at: string | null;
-    /** Operator access to the admin report. */
     is_admin?: boolean;
     /* @chisel-2fa */
     two_factor_enabled?: boolean;

@@ -1,4 +1,3 @@
-/** Quote versions prevent late replies from pricing different inputs. */
 import { computed, onScopeDispose, ref, watch } from 'vue';
 import type { ComputedRef, Ref } from 'vue';
 import {
@@ -8,6 +7,7 @@ import {
     isQuotePreview,
     readErrorMessage,
     readRetryAfter,
+    quoteInputKey,
     readXsrfToken,
     validateQuoteInput,
 } from '@/lib/quote';
@@ -22,15 +22,11 @@ import type {
 } from '@/types/quote';
 
 export type UseQuotePreview = {
-    /** Latest quote for the current inputs; `null` whenever they changed. */
     quote: Ref<QuotePreview | null>;
-    /** Client and server field messages, keyed by visible control. */
     errors: ComputedRef<QuoteFieldErrors>;
-    /** Field messages returned by the server only (used for reveal rules). */
     serverFieldErrors: Ref<QuoteFieldErrors>;
     failure: Ref<QuoteFailure | null>;
     status: ComputedRef<QuoteStatus>;
-    /** Re-runs the current (valid) inputs immediately, bypassing the debounce. */
     retry: () => void;
 };
 
@@ -289,19 +285,12 @@ export function useQuotePreview(input: Ref<QuoteFormInput>): UseQuotePreview {
     }
 
     watch(
-        () =>
-            JSON.stringify([
-                input.value.prompt,
-                input.value.size,
-                input.value.quality,
-                input.value.referenceUrls,
-            ]),
+        () => quoteInputKey(input.value),
         () => {
             if (disposed) {
                 return;
             }
 
-            // Drop the previous price immediately: it belongs to other inputs.
             clearResult();
             scheduleRequest(QUOTE_DEBOUNCE_MS);
         },

@@ -24,10 +24,8 @@ return Application::configure(basePath: dirname(__DIR__))
             '192.168.0.0/16',
         ]);
 
-        // The Mercure hub must read its access-token cookie as a plain JWT.
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state', Mercure::COOKIE]);
 
-        // Verify the signed raw webhook before input middleware decodes its JSON.
         $isWebhook = fn (Request $request): bool => $request->is('webhooks/pixelforge');
         $middleware->trimStrings(except: [$isWebhook]);
         $middleware->convertEmptyStringsToNull(except: [$isWebhook]);

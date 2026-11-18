@@ -2,11 +2,6 @@
 
 namespace App\Enums;
 
-/**
- * Credit ledger entry kinds. Amounts are stored unsigned; the type gives the
- * direction: purchases, releases and credit adjustments add available credit;
- * holds, debits and debit adjustments remove it.
- */
 enum CreditEntryType: string
 {
     case Purchase = 'purchase';

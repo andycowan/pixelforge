@@ -7,7 +7,6 @@ use App\Jobs\SubmitGenerationJob;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\RateLimiter;
 
-/** Shared across both authenticated HTTP operations and all configured keys. */
 final class ProviderRequestBudget
 {
     /** @param SubmitGenerationJob|ReconcileGenerationJob $job */
@@ -29,7 +28,6 @@ final class ProviderRequestBudget
             $lock->release();
         }
 
-        // Releasing queue work must not consume a generation's network-attempt budget.
         if ($delay > 0) {
             $job->release($delay);
 

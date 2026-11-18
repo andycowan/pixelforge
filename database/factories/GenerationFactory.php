@@ -9,29 +9,10 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
-/**
- * @extends Factory<Generation>
- */
+/** @extends Factory<Generation> */
 class GenerationFactory extends Factory
 {
-    /**
-     * A deterministic quote fixture, not live provider pricing.
-     *
-     * Fixture assumptions: "A lighthouse" is 12 characters / 3 text tokens,
-     * medium square output is 1,100 tokens, reasoning is quoted at the 1,100
-     * token midpoint, and the provider maxima are 4 text / 2,000 reasoning
-     * tokens. Provider rates are kept as exact decimal strings:
-     * text 5.00, reference image 10.00, output image 40.00, reasoning 12.50
-     * per million tokens. The customer price is the provider cost x 5/4,
-     * rounded up once to the next whole cent:
-     *
-     * estimate: 15,000 + 44,000,000 + 13,750,000 = 57,765,000
-     *           provider nanodollars x 5/4 = 72,206,250 -> $0.08 = 80,000,000
-     * maximum:  20,000 + 44,000,000 + 25,000,000 = 69,020,000
-     *           provider nanodollars x 5/4 = 86,275,000 -> $0.09 = 90,000,000
-     *
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     public function definition(): array
     {
         return [
@@ -54,7 +35,6 @@ class GenerationFactory extends Factory
                     'output_tokens' => 1100,
                     'reasoning_tokens' => 1100,
                 ],
-                // Same shape as GenerationQuote::snapshot(), so prices are recomputable from it.
                 'bounds' => [
                     'input_text_tokens' => 4,
                     'input_image_tokens' => 0,

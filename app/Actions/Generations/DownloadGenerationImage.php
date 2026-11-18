@@ -12,15 +12,8 @@ use Symfony\Component\HttpKernel\Exception\GoneHttpException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-/**
- * Fetch an owned generation's image so the browser can save it as a file.
- *
- * The provider sends no CORS headers, and browsers ignore `download` on
- * cross-origin links, so the image is relayed through this origin.
- */
 final class DownloadGenerationImage
 {
-    /** Generated PNGs are a few MB; the cap bounds memory per request. */
     private const MAX_BYTES = 20 * 1024 * 1024;
 
     private const EXTENSIONS = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/webp' => 'webp'];

@@ -19,7 +19,6 @@ export type CreditEntry = {
         | 'debit_adjustment';
     amount_usd: string;
     generation_id: string | null;
-    /** Prompt excerpt for generation entries, or an adjustment's reason. */
     detail: string | null;
     created_at: string;
 };

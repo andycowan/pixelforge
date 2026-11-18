@@ -1,14 +1,3 @@
-// Frontend logic tests for the quote preview.
-//
-// Run with Node's built-in runner; no test framework or extra dependency is
-// installed in this project:
-//
-//     node --test tests/frontend/quote-preview.test.mjs
-//
-// These cover the pure, framework-free parts of the preview: Unicode prompt
-// counting, reference-URL parsing/validation, exact money display, CSRF cookie
-// reading, retry headers, 422 flattening and the response guard. Component
-// rendering and the fetch/abort/debounce races are verified in the browser.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -55,7 +44,6 @@ void test('counts prompt characters as Unicode code points', () => {
 void test('accepts 4000 code points but not 4001', () => {
     const atLimit = '😀'.repeat(PROMPT_MAX_CODE_POINTS);
 
-    // 4000 emoji are 8000 UTF-16 units: a `maxlength="4000"` would cut them.
     assert.equal(atLimit.length, 8000);
     assert.notEqual(
         validateQuoteInput(formInput({ prompt: atLimit })).request,

@@ -157,9 +157,7 @@ final class ProviderGenerationTest extends TestCase
         }
     }
 
-    /**
-     * @return array<string, array{array<string, mixed>}>
-     */
+    /** @return array<string, array{array<string, mixed>}> */
     public static function invalidPayloads(): array
     {
         $invalid = [];
@@ -415,9 +413,7 @@ final class ProviderGenerationTest extends TestCase
         ProviderGeneration::fromArray($payload);
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     private static function fixture(string $name): array
     {
         return json_decode(

@@ -41,7 +41,6 @@ const mainNavItems = computed<NavItem[]>(() => [
             ? formatSignedUsd(page.props.credits.available_usd)
             : undefined,
     },
-    // Operators only; the route itself is also gated server-side.
     ...(page.props.auth.user?.is_admin
         ? [{ title: 'Operator report', href: adminReport(), icon: ChartColumn }]
         : []),

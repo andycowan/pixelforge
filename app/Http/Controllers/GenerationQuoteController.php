@@ -10,9 +10,6 @@ use App\Http\Requests\GenerationQuoteRequest;
 use App\Models\CreditLedgerEntry;
 use Illuminate\Http\JsonResponse;
 
-/**
- * JSON quote endpoint: validated input -> action -> response.
- */
 final class GenerationQuoteController extends Controller
 {
     public function __invoke(GenerationQuoteRequest $request, QuoteGeneration $quoteGeneration): JsonResponse
@@ -37,7 +34,6 @@ final class GenerationQuoteController extends Controller
             );
         }
 
-        // Advisory only: submission re-checks credit under the owner lock.
         return $this->noStore(response()->json([
             ...$quote->toArray(),
             'affordable' => CreditLedgerEntry::canAfford($request->user(), $quote->maximumCostNanodollars),

@@ -1,4 +1,3 @@
-/** Pure preview helpers; server pricing remains authoritative. */
 import type {
     QuoteField,
     QuoteFieldErrors,
@@ -40,15 +39,10 @@ export const quoteQualityOptions: readonly QuoteQualityOption[] = [
 
 const MONEY_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d+)?$/;
 
-/**
- * Counts Unicode code points like the server, not UTF-16 units or grapheme
- * clusters. A combined emoji can contain several code points.
- */
 export function countCodePoints(value: string): number {
     return Array.from(value).length;
 }
 
-/** Splits the reference textarea into trimmed, non-empty lines, in order. */
 export function parseReferenceUrls(value: string): string[] {
     return value
         .split(/\r?\n/)
@@ -56,7 +50,6 @@ export function parseReferenceUrls(value: string): string[] {
         .filter((line) => line !== '');
 }
 
-/** Only absolute http(s) URLs may be quoted as reference images. */
 export function isHttpUrl(value: string): boolean {
     if (!/^https?:\/\//i.test(value)) {
         return false;
@@ -74,11 +67,6 @@ export function isHttpUrl(value: string): boolean {
     }
 }
 
-/**
- * Light client validation for quickly obvious problems. The server remains
- * authoritative: anything it rejects comes back as field errors on the quote
- * response and replaces these messages.
- */
 export function validateQuoteInput(input: QuoteFormInput): QuoteValidation {
     const promptBlank = input.prompt.trim() === '';
     const promptLength = countCodePoints(input.prompt);
@@ -118,11 +106,6 @@ export function validateQuoteInput(input: QuoteFormInput): QuoteValidation {
     };
 }
 
-/**
- * Trims insignificant trailing zeros from an exact amount string without
- * changing its value or rounding it. At least two decimal places are kept so
- * money never looks like a token count.
- */
 export function formatUsdAmount(value: string): string {
     if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value)) {
         return value;
@@ -143,14 +126,38 @@ export function formatUsdAmount(value: string): string {
     return `${whole}.${trimmed}`;
 }
 
-/** A dollar amount that may be negative (balances): "-$0.04", never "$-0.04". */
 export function formatSignedUsd(value: string): string {
     const amount = formatUsdAmount(value);
 
     return amount.startsWith('-') ? `-$${amount.slice(1)}` : `$${amount}`;
 }
 
-/** Short, human label for the currency shown beside every amount. */
+export function quoteInputKey(input: QuoteFormInput): string {
+    return JSON.stringify([
+        input.prompt,
+        input.size,
+        input.quality,
+        input.referenceUrls,
+    ]);
+}
+
+export function sizeLabel(size: string): string {
+    return (
+        quoteSizeOptions.find((option) => option.value === size)?.label ?? size
+    );
+}
+
+export function qualityLabel(quality: string): string {
+    return (
+        quoteQualityOptions.find((option) => option.value === quality)?.label ??
+        quality
+    );
+}
+
+export function referenceImagesLabel(count: number): string {
+    return `${count} reference ${count === 1 ? 'image' : 'images'}`;
+}
+
 export function formatCurrency(value: string): string {
     return value.trim().toUpperCase();
 }
@@ -159,10 +166,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/**
- * Structural guard so a malformed or envelope-shaped payload becomes a visible
- * "unexpected response" failure instead of a half-empty price card.
- */
 export function isQuotePreview(value: unknown): value is QuotePreview {
     if (!isRecord(value)) {
         return false;
@@ -181,7 +184,6 @@ export function isQuotePreview(value: unknown): value is QuotePreview {
     );
 }
 
-/** Returns seconds from a `Retry-After` header when it is a plain delay. */
 export function readRetryAfter(value: string | null): number | null {
     if (value === null) {
         return null;
@@ -198,10 +200,6 @@ export function readRetryAfter(value: string | null): number | null {
     return Number.isSafeInteger(seconds) && seconds > 0 ? seconds : null;
 }
 
-/**
- * Reads the CSRF token from the `XSRF-TOKEN` cookie Laravel sets for the web
- * middleware group. `X-XSRF-TOKEN` expects the decoded cookie payload.
- */
 export function readXsrfToken(cookieHeader: string): string | null {
     for (const part of cookieHeader.split(';')) {
         const entry = part.trim();
@@ -263,7 +261,7 @@ function parseErrorKey(
     return null;
 }
 
-function readMessage(payload: unknown): string | null {
+export function readErrorMessage(payload: unknown): string | null {
     if (isRecord(payload) && typeof payload.message === 'string') {
         const message = payload.message.trim();
 
@@ -273,11 +271,6 @@ function readMessage(payload: unknown): string | null {
     return null;
 }
 
-/**
- * Turns a Laravel 422 body into friendly field messages. Indexed reference
- * errors (`reference_images.0`) are labelled with their visible position;
- * anything unrecognised is surfaced as a general message instead of dropped.
- */
 export function flattenValidationErrors(payload: unknown): {
     fieldErrors: QuoteFieldErrors;
     generalMessages: string[];
@@ -288,7 +281,7 @@ export function flattenValidationErrors(payload: unknown): {
         isRecord(payload) && isRecord(payload.errors) ? payload.errors : null;
 
     if (errors === null) {
-        const message = readMessage(payload);
+        const message = readErrorMessage(payload);
 
         return {
             fieldErrors,
@@ -318,9 +311,4 @@ export function flattenValidationErrors(payload: unknown): {
     }
 
     return { fieldErrors, generalMessages };
-}
-
-/** Safe general fallback text from an error response body. */
-export function readErrorMessage(payload: unknown): string | null {
-    return readMessage(payload);
 }

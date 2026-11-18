@@ -17,7 +17,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
     Route::get('generations', GenerationsController::class)->name('generations.index');
     Route::post('generations', StoreGenerationController::class)
-        // Distinct prefixes: unprefixed throttles share one per-user counter across routes.
         ->middleware('throttle:10,1,generation-submissions:')
         ->name('generations.store');
 

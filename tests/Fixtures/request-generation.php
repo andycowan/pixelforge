@@ -10,7 +10,6 @@ use Illuminate\Validation\ValidationException;
 use Saloon\Http\Faking\MockResponse;
 use Saloon\Laravel\Facades\Saloon;
 
-// A real independent application process, never a nested PHPUnit/TestCase run.
 require __DIR__.'/../bootstrap.php';
 $app = require __DIR__.'/../../bootstrap/app.php';
 $app->make(Kernel::class)->bootstrap();

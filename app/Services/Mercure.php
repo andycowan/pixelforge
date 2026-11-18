@@ -8,16 +8,8 @@ use Illuminate\Support\Str;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Cookie;
 
-/**
- * Mercure 1.x access tokens, the subscriber cookie and private publication.
- *
- * Tokens are RFC 9068 access tokens (`typ: at+jwt`) carrying Mercure
- * `authorization_details`. The hub fixes HS256 in its configuration, so this
- * signs them directly instead of adding a JWT dependency.
- */
 final class Mercure
 {
-    /** The hub's default cookie for EventSource clients, which cannot send headers. */
     public const COOKIE = '__Secure-mercure_access_token';
 
     public const PATH = '/.well-known/mercure';
@@ -31,7 +23,6 @@ final class Mercure
         return config('app.url').'/users/'.$userId.'/generations';
     }
 
-    /** A cookie granting the user's own private generation updates, and nothing else. */
     public function subscriberCookie(User $user): Cookie
     {
         $token = $this->token('subscriber_key', 'subscribe', $this->topicFor($user->id), self::SUBSCRIBER_TTL, 'users/'.$user->id);
@@ -44,11 +35,7 @@ final class Mercure
         return $this->cookie('', 1);
     }
 
-    /**
-     * Publish a private update; throws when the hub does not acknowledge it.
-     *
-     * @param  array<string, mixed>  $data
-     */
+    /** @param  array<string, mixed>  $data */
     public function publish(string $topic, array $data): void
     {
         $token = $this->token('publisher_key', 'publish', $topic, self::PUBLISHER_TTL, 'pixelforge');
@@ -97,7 +84,6 @@ final class Mercure
 
     private function cookie(string $value, int $expires): Cookie
     {
-        // The __Secure- prefix requires Secure; the hub path keeps it off every other request.
         return Cookie::create(self::COOKIE, $value, $expires, self::PATH, null, true, true, false, Cookie::SAMESITE_STRICT);
     }
 

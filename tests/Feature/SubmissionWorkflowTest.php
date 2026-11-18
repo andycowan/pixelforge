@@ -112,7 +112,6 @@ final class SubmissionWorkflowTest extends TestCase
         $this->assertSame(GenerationSubmissionStatus::Rejected, $generation->fresh()->submission_status);
         $this->assertNull($generation->fresh()->provider_status);
         $this->assertDatabaseCount('generation_charges', 0);
-        // A rejection is a visible change: it must reach the live page too.
         $this->assertDatabaseHas('outbox_messages', ['generation_id' => $generation->id, 'revision' => $generation->fresh()->revision]);
         Queue::assertPushed(PublishOutboxJob::class, 1);
     }
