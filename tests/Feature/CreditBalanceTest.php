@@ -187,6 +187,31 @@ final class CreditBalanceTest extends TestCase
         $this->assertSame(1_000_000_000, CreditLedgerEntry::availableFor($user));
     }
 
+    public function test_a_never_created_submission_that_stops_retrying_releases_the_hold(): void
+    {
+        $user = $this->userWithCredit(1_000_000_000);
+        $generation = $this->requestedGeneration($user);
+        $calls = 0;
+        Saloon::fake([CreateGeneration::class => function () use (&$calls): MockResponse {
+            $calls++;
+
+            return MockResponse::make(['error' => ['code' => 'overloaded']], 503);
+        }]);
+
+        for ($attempt = 0; $attempt < 6; $attempt++) {
+            $this->submit($generation);
+            $this->travel(5)->minutes();
+        }
+
+        $this->assertSame(5, $calls);
+        $fresh = $generation->fresh();
+        $this->assertSame(GenerationSubmissionStatus::Rejected, $fresh->submission_status);
+        $this->assertSame('The provider stayed too busy to accept this request. You were not charged; please try again.', $fresh->toHistoryArray()['submission_message']);
+        $this->assertSame('0.000000000', $fresh->toHistoryArray()['actual_cost_usd']);
+        $this->assertLedger($generation, hold: self::MAXIMUM, release: self::MAXIMUM);
+        $this->assertSame(1_000_000_000, CreditLedgerEntry::availableFor($user));
+    }
+
     public function test_uncertain_and_paused_submissions_keep_their_hold_until_the_outcome_is_known(): void
     {
         $user = $this->userWithCredit(1_000_000_000);

@@ -50,6 +50,20 @@ final class ReconciliationRecoveryTest extends TestCase
         $this->assertSame(15, (int) now()->diffInSeconds($generation->fresh()->next_attempt_at));
     }
 
+    public function test_reconciliation_release_never_wakes_before_the_recorded_due_time(): void
+    {
+        $generation = $this->accepted();
+        Saloon::fake([GetGeneration::class => MockResponse::make($this->providerPayload($generation, 'processing'))]);
+        $this->travel(15)->seconds();
+        $this->travel(600)->milliseconds();
+        $job = (new ReconcileGenerationJob($generation->id))->withFakeQueueInteractions();
+        app()->call([$job, 'handle']);
+
+        $job->assertReleased();
+        $dueAt = $generation->fresh()->next_attempt_at;
+        $this->assertGreaterThanOrEqual($dueAt->getTimestampMs(), (now()->getTimestamp() + $job->job->releaseDelay) * 1000);
+    }
+
     public function test_reconciliation_uses_shared_apply_and_never_polls_completed_images(): void
     {
         $generation = $this->accepted();

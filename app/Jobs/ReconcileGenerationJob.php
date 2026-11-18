@@ -79,17 +79,18 @@ final class ReconcileGenerationJob implements ShouldQueue
         if ($delay !== null && now()->addSeconds($delay)->gte($generation->created_at->copy()->addMinutes(30))) {
             $delay = null;
         }
-        $scheduled = DB::transaction(function () use ($delay): bool {
+        $retryAt = $delay === null ? null : now()->addSeconds($delay);
+        $scheduled = DB::transaction(function () use ($retryAt): bool {
             $generation = Generation::query()->lockForUpdate()->find($this->generationId);
             if ($generation === null || ! $this->checkable($generation)) {
                 return false;
             }
-            $generation->deferProviderCheck($delay === null ? null : now()->addSeconds($delay));
+            $generation->deferProviderCheck($retryAt);
 
-            return $delay !== null;
+            return $retryAt !== null;
         }, 3);
-        if ($scheduled) {
-            $this->release($delay);
+        if ($scheduled && $retryAt !== null) {
+            $this->release($retryAt->ceilSecond());
         } elseif ($delay === null) {
             report(new RuntimeException('Provider reconciliation requires operator attention for generation '.$generation->id));
         }

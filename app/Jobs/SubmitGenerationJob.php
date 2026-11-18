@@ -121,7 +121,7 @@ final class SubmitGenerationJob implements ShouldQueue
         }
         if (in_array($provider->status, [ProviderGenerationStatus::Queued, ProviderGenerationStatus::Processing], true)) {
             try {
-                ReconcileGenerationJob::dispatch($generation->id)->delay(now()->addSeconds(15));
+                ReconcileGenerationJob::dispatch($generation->id)->delay(now()->addSeconds(15)->ceilSecond());
             } catch (Throwable) {
                 report(new RuntimeException('Reconciliation dispatch failed for generation '.$generation->id.'; durable work retained.'));
             }
@@ -135,7 +135,12 @@ final class SubmitGenerationJob implements ShouldQueue
         if ($retryAt !== null && $retryAt->gte($claimed->created_at->copy()->addMinutes(30))) {
             $retryAt = null;
             $problem['error']['retryable'] = false;
-            $problem['error']['message'] = 'Provider confirmation requires operator attention.';
+            if ($problem['status'] === GenerationSubmissionStatus::Pending) {
+                $problem['status'] = GenerationSubmissionStatus::Rejected;
+                $problem['error']['message'] = 'The provider did not create the request and automatic retries stopped.';
+            } else {
+                $problem['error']['message'] = 'Provider confirmation requires operator attention.';
+            }
         }
         $notify = false;
         $scheduled = DB::transaction(function () use ($retryAt, $problem, &$notify): bool {
@@ -151,7 +156,7 @@ final class SubmitGenerationJob implements ShouldQueue
             rescue(fn () => PublishOutboxJob::dispatch());
         }
         if ($scheduled) {
-            $this->release(max(1, (int) now()->diffInSeconds($retryAt, false)));
+            $this->release($retryAt->ceilSecond());
         }
     }
 

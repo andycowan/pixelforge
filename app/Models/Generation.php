@@ -486,14 +486,19 @@ class Generation extends Model
                 ? 'Awaiting provider confirmation. Please do not submit the same request again.'
                 : 'Automatic retries are paused and need attention. The outcome is unconfirmed; do not start a duplicate request.';
         }
-        if ($this->submission_status !== GenerationSubmissionStatus::Rejected && ($this->submission_error['retryable'] ?? true) === false) {
+        if ($this->submission_status === GenerationSubmissionStatus::Rejected) {
+            return match ($this->submission_error['code'] ?? null) {
+                'content_policy_violation' => 'The provider could not accept this prompt. You were not charged.',
+                'daily_limit_exceeded' => 'The provider daily limit has been reached. You were not charged; please try again later.',
+                'rate_limit_exceeded', 'concurrency_limit_exceeded', 'overloaded' => 'The provider stayed too busy to accept this request. You were not charged; please try again.',
+                default => 'The provider could not accept this request. You were not charged.',
+            };
+        }
+        if (($this->submission_error['retryable'] ?? true) === false) {
             return 'Submission is paused and needs attention. No generation result has been confirmed.';
         }
 
         return match ($this->submission_error['code'] ?? null) {
-            'content_policy_violation' => 'The provider could not accept this prompt. You were not charged.',
-            'validation_failed' => 'The provider could not accept this request. You were not charged.',
-            'daily_limit_exceeded' => 'The provider daily limit has been reached. Please try again later.',
             'rate_limit_exceeded', 'concurrency_limit_exceeded', 'overloaded' => 'The provider is busy. Your request is waiting to retry.',
             default => 'Submission is temporarily unavailable. Please try again later.',
         };

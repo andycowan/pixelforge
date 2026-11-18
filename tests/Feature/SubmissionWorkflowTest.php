@@ -151,6 +151,30 @@ final class SubmissionWorkflowTest extends TestCase
         $this->assertSame(1, $generation->fresh()->submission_attempts);
     }
 
+    public function test_retry_release_never_wakes_before_the_recorded_due_time(): void
+    {
+        $this->travelTo(now()->addMilliseconds(600));
+        $generation = $this->generation();
+        Saloon::fake([CreateGeneration::class => MockResponse::make(['error' => ['code' => 'overloaded']], 503)]);
+        $job = (new SubmitGenerationJob($generation->id))->withFakeQueueInteractions();
+        app()->call([$job, 'handle']);
+
+        $job->assertReleased();
+        $dueAt = $generation->fresh()->next_attempt_at;
+        $this->assertGreaterThanOrEqual($dueAt->getTimestampMs(), (now()->getTimestamp() + $job->job->releaseDelay) * 1000);
+    }
+
+    public function test_first_status_check_is_not_scheduled_before_the_recorded_due_time(): void
+    {
+        $this->travelTo(now()->addMilliseconds(600));
+        $generation = $this->generation();
+        Saloon::fake([CreateGeneration::class => MockResponse::make($this->providerPayload($generation), 202)]);
+        $this->submit($generation);
+
+        $dueAt = $generation->fresh()->next_attempt_at;
+        Queue::assertPushed(ReconcileGenerationJob::class, fn (ReconcileGenerationJob $job): bool => $job->delay->getTimestamp() * 1000 >= $dueAt->getTimestampMs());
+    }
+
     public function test_early_webhook_acceptance_wins_over_late_create_error(): void
     {
         $generation = $this->generation();

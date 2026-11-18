@@ -22,6 +22,9 @@ final class GenerationSubmissionPolicy
         if ($delay > 1800) {
             $retry = false;
         }
+        if ($status === GenerationSubmissionStatus::Pending && ! $retry) {
+            $status = GenerationSubmissionStatus::Rejected;
+        }
         $safeCode = in_array($code, ['validation_failed', 'content_policy_violation', 'rate_limit_exceeded', 'concurrency_limit_exceeded', 'daily_limit_exceeded', 'invalid_api_key', 'overloaded', 'idempotency_key_reused', 'transport_error', 'invalid_provider_response'], true) ? $code : 'unknown_provider_error';
         $message = match ($safeCode) {
             'validation_failed' => 'The provider rejected the request options.',
@@ -29,7 +32,11 @@ final class GenerationSubmissionPolicy
             'daily_limit_exceeded' => 'The provider daily quota is exhausted; operator attention is required.',
             'invalid_api_key' => 'Provider authentication requires operator attention.',
             'idempotency_key_reused' => 'Provider request identity requires operator attention.',
-            default => $retry ? 'Awaiting provider confirmation; a retry is scheduled.' : 'Provider confirmation requires operator attention.',
+            default => match (true) {
+                $retry => 'Awaiting provider confirmation; a retry is scheduled.',
+                $status === GenerationSubmissionStatus::Rejected => 'The provider did not create the request and automatic retries stopped.',
+                default => 'Provider confirmation requires operator attention.',
+            },
         };
 
         return ['error' => ['code' => $safeCode, 'message' => $message, 'retryable' => $retry], 'status' => $status, 'delay' => $retry ? $delay : null];
