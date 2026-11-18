@@ -31,6 +31,25 @@ Open <https://pixelforge.fl.wb>.
 
 The app key lives only in the ignored, host-owned `.env`. It is bind-mounted read-only at runtime and is never added to the image or repository.
 
+## Email
+
+Email verification and password resets use Laravel's mail system. Local Fairlead mail stays on SMTP/Mailpit; adding a Resend key alone does not enable external delivery.
+
+For real delivery, verify your sending domain in Resend and set these in the deployment's private runtime environment (never Git or build arguments):
+
+```dotenv
+MAIL_MAILER=resend
+RESEND_API_KEY=your-resend-sending-key
+MAIL_FROM_ADDRESS=hello@your-verified-domain.example
+MAIL_FROM_NAME=Pixelforge
+```
+
+Use a sending-only API key restricted to your sending domain. Set `APP_URL` to the application's canonical HTTPS URL so authentication links point at the right environment. The native Laravel Resend transport and its PHP SDK are installed; no extra service provider or webhook endpoint is needed. See [Laravel's Resend setup](https://laravel.com/framework/docs/13.x/mail#resend-driver).
+
+Deploy an image containing this dependency before enabling `MAIL_MAILER=resend`. After changing settings, clear/rebuild any Laravel configuration cache and recreate/redeploy the app so web and background processes inherit the new environment. Locally, if deliberately testing real delivery, use `fl project restart`, then `docker exec pixelforge-app-1 php artisan config:clear`; leave the Resend overrides unset for normal Mailpit use.
+
+Verify with a new test registration and the forgot-password flow, checking both the Resend dashboard and recipient inbox. Authentication mail remains synchronous; delivery errors are surfaced, not silently redirected to logs, and API acceptance does not guarantee inbox delivery. Automated tests use dummy credentials and mocked transport responses; they send no real mail.
+
 ## Pricing preview
 
 Sign in to the workspace to price a prompt, size, quality and up to four reference-image URLs. Estimates, conditional maximum prices and actual charges include a 25% markup and are rounded up once to the next whole cent; provider costs stay exact. The workspace shows customers only the estimated and maximum prices; the quote response carries no provider costs, token counts, rates or markup (those stay in the stored quote snapshot). USD amounts remain exact decimal strings in the browser.
