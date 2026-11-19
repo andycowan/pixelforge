@@ -33,10 +33,10 @@ Cloudflare proxies the domain, and the server's Traefik does not trust Cloudflar
 
 Every successful `main` build deploys itself:
 
-1. CI publishes `:latest` and `:sha-<commit>`, with the commit baked in as `APP_REVISION`.
+1. CI publishes `:latest` and `:sha-<commit>`, with the build identity `<commit>.<run id>.<attempt>` baked in as `APP_REVISION`.
 2. The **Deploy to production** job POSTs the app's Dokploy deploy webhook (`DOKPLOY_DEPLOY_WEBHOOK_URL` in the GitHub `production` environment). That URL can only redeploy this app.
 3. Swarm starts the new container before stopping the old one, rolling back on failure. The new container runs `php artisan migrate --force`, then starts Supervisor. A failed migration or health check leaves the previous container serving.
-4. CI polls `https://px.bit-monkey.io/up` until its `X-App-Revision` header equals the pushed commit, and fails after 10 minutes. Dokploy reports webhook deployments as done even when the new container never starts, so this check is the real signal.
+4. CI polls `https://px.bit-monkey.io/up` until its `X-App-Revision` header equals that build identity, and fails after 10 minutes. Including the run makes a same-commit rebuild (for example a base-image security update via a manual run) wait for its own container rather than passing against the old one. Dokploy reports webhook deployments as done even when the new container never starts, so this check is the real signal.
 
 Migrations must be additive: during the overlap the previous release runs against the migrated schema. A destructive change needs a separately planned release. Production prohibits `migrate:fresh`, `db:wipe` and similar destructive commands.
 
